@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Local configuration and saves
+saves/
+calibration.json
+
+# Build and IDE
+*.zip
+.vscode/

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Piper 블록 코딩
+GenericName=로봇 블록 코딩
+Comment=Piper 로봇 팔을 블록 코딩으로 제어하는 프로그램
+Exec=/usr/bin/python3 /home/wego/piper_ws/src/piper_block_coding/launcher.py
+Icon=/home/wego/piper_ws/src/piper_block_coding/icon.png
+Terminal=false
+Categories=Education;Science;
+Keywords=robot;piper;block;coding;로봇;블록코딩;
+StartupNotify=true
+StartupWMClass=launcher

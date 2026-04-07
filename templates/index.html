@@ -1,0 +1,1544 @@
+<!DOCTYPE html>
+<!-- HTML5 문서 타입 선언 -->
+<html lang="ko">
+<!-- 문서 언어: 한국어 (스크린리더, 검색엔진 등에 언어 정보 제공) -->
+
+<head>
+  <meta charset="UTF-8">
+  <!-- 문자 인코딩: UTF-8 (한글 표시 가능) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- 모바일 뷰포트 설정: 화면 너비에 맞게 렌더링 -->
+  <title>Piper 블록 코딩</title>
+  <!-- 브라우저 탭에 표시되는 제목 -->
+
+  <!-- ── 외부 라이브러리 (CDN) ─────────────────────────── -->
+
+  <!-- Blockly 코어: 블록 코딩 엔진 (구글 오픈소스, v9.3.3) -->
+  <script src="https://cdn.jsdelivr.net/npm/blockly@9.3.3/blockly_compressed.js"></script>
+
+  <!-- Blockly Python 코드 생성기: 블록 → Python 코드 변환 담당 -->
+  <!-- Blockly.Python.workspaceToCode() 함수 제공 -->
+  <script src="https://cdn.jsdelivr.net/npm/blockly@9.3.3/python_compressed.js"></script>
+
+  <!-- Blockly 영어 메시지 파일: 블록 라벨·툴팁 등 기본 텍스트 정의 -->
+  <script src="https://cdn.jsdelivr.net/npm/blockly@9.3.3/msg/en.js"></script>
+
+  <!-- Socket.IO 클라이언트: 서버와 실시간 양방향 통신 (WebSocket) -->
+  <!-- 로봇 실행 출력을 실시간으로 터미널 패널에 표시하는 데 사용 -->
+  <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+
+  <!-- 구글 폰트: 본문용(Noto Sans KR) + 코드용(JetBrains Mono) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <style>
+    /* ── 전역 리셋 ──────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── CSS 변수 ───────────────────────────────────────── */
+    :root {
+      --bg:           #0b0f16;   /* 메인 배경 */
+      --surface:      #141a24;   /* 패널/헤더 배경 */
+      --surface2:     #1a2233;   /* 패널 헤더 강조 배경 */
+      --surface3:     #202b3d;   /* hover 배경 */
+      --border:       #2a3550;   /* 테두리 */
+      --accent:       #22c55e;   /* 실행 버튼 초록 */
+      --accent-dim:   #166534;   /* 초록 어두운 버전 */
+      --accent-hover: #4ade80;   /* 초록 hover */
+      --danger:       #ef4444;   /* 정지/오류 빨강 */
+      --danger-dim:   #7f1d1d;   /* 빨강 어두운 배경 */
+      --warning:      #f59e0b;   /* 경고 노랑 */
+      --info:         #60a5fa;   /* 정보 파랑 */
+      --info-dim:     #1e3a5f;   /* 파랑 어두운 배경 */
+      --text:         #e2e8f0;   /* 기본 텍스트 (밝게) */
+      --text-dim:     #94a3b8;   /* 보조 텍스트 */
+      --text-muted:   #64748b;   /* 흐린 텍스트 */
+      --header-h:     68px;      /* 헤더 높이 (키움) */
+      --panel-w:      460px;     /* 오른쪽 패널 너비 (키움) */
+      --radius:       10px;      /* 공통 border-radius */
+    }
+
+    /* ── 기본 폰트/배경 ─────────────────────────────────── */
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Noto Sans KR', 'Segoe UI', system-ui, sans-serif;
+      font-size: 15px;           /* 기본 폰트 크기 상향 */
+      line-height: 1.6;
+    }
+
+    /* ── 상단 헤더 ──────────────────────────────────────── */
+    #header {
+      height: var(--header-h);
+      background: var(--surface);
+      border-bottom: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      gap: 16px;
+      position: relative;
+      z-index: 10;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.4);
+    }
+
+    /* 로고 */
+    #header .logo {
+      font-size: 22px;
+      font-weight: 700;
+      color: #fff;
+      white-space: nowrap;
+      letter-spacing: -0.3px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    #header .logo-badge {
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--info-dim);
+      color: var(--info);
+      border: 1px solid var(--info);
+      border-radius: 4px;
+      padding: 1px 7px;
+      letter-spacing: 0.5px;
+    }
+
+    #header .sep { flex: 1; }
+
+    /* CAN 포트 입력 */
+    .field-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-dim);
+    }
+    .field-group label {
+      font-size: 13px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .field-group input {
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      color: var(--text);
+      padding: 7px 12px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      width: 90px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .field-group input:focus {
+      border-color: var(--info);
+      box-shadow: 0 0 0 3px rgba(96,165,250,0.15);
+    }
+
+    /* 상태 알약 */
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-dim);
+      padding: 6px 14px;
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 999px;
+      transition: all .3s;
+    }
+    .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--border);
+      transition: background .3s, box-shadow .3s;
+      flex-shrink: 0;
+    }
+    .dot.running {
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent), 0 0 20px rgba(34,197,94,0.3);
+      animation: pulse 1.5s infinite;
+    }
+    .dot.error { background: var(--danger); }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 8px var(--accent); }
+      50%       { box-shadow: 0 0 16px var(--accent), 0 0 30px rgba(34,197,94,0.4); }
+    }
+
+    /* ── 버튼 ───────────────────────────────────────────── */
+    .btn {
+      padding: 8px 18px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all .15s;
+      white-space: nowrap;
+      letter-spacing: 0.2px;
+    }
+    .btn:active { transform: scale(.96); }
+
+    .btn-ghost {
+      background: transparent;
+      border: 1.5px solid var(--border);
+      color: var(--text-dim);
+    }
+    .btn-ghost:hover {
+      background: var(--surface3);
+      border-color: var(--text-dim);
+      color: var(--text);
+    }
+
+    .btn-run {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: #fff;
+      box-shadow: 0 2px 10px rgba(34,197,94,0.3);
+    }
+    .btn-run:hover {
+      background: linear-gradient(135deg, #4ade80, #22c55e);
+      box-shadow: 0 4px 16px rgba(34,197,94,0.4);
+    }
+    .btn-run:disabled {
+      background: var(--accent-dim);
+      color: #4b7a56;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+    .btn-stop {
+      background: var(--danger-dim);
+      border: 1.5px solid var(--danger);
+      color: var(--danger);
+    }
+    .btn-stop:hover {
+      background: var(--danger);
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(239,68,68,0.4);
+    }
+
+    /* ── 바디 레이아웃 ──────────────────────────────────── */
+    #body {
+      display: flex;
+      height: calc(100vh - var(--header-h));
+    }
+
+    /* 왼쪽: Blockly */
+    #blockly-pane { flex: 1; position: relative; min-width: 0; }
+    #blocklyDiv   { width: 100%; height: 100%; }
+
+    /* ── 오른쪽 패널 ────────────────────────────────────── */
+    #right-panel {
+      width: var(--panel-w);
+      min-width: 360px;
+      display: flex;
+      flex-direction: column;
+      border-left: 2px solid var(--border);
+      background: var(--surface);
+    }
+
+    /* 패널 헤더 */
+    .panel-header {
+      padding: 11px 16px;
+      background: var(--surface2);
+      border-bottom: 1.5px solid var(--border);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--info);
+      letter-spacing: 0.3px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      user-select: none;
+    }
+    .panel-header span { color: var(--text-muted); font-weight: 400; font-size: 12px; }
+
+    /* 미니 버튼 */
+    .mini-btn {
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .mini-btn:hover {
+      color: var(--text);
+      border-color: var(--info);
+      background: var(--info-dim);
+    }
+
+    /* 코드 패널 (위쪽) */
+    #code-panel {
+      flex: 0 0 40%;
+      display: flex;
+      flex-direction: column;
+      border-bottom: 2px solid var(--border);
+      overflow: hidden;
+    }
+    #codeOutput {
+      flex: 1;
+      padding: 14px 16px;
+      font-family: 'JetBrains Mono', 'Courier New', monospace;
+      font-size: 13.5px;          /* 코드 폰트 크기 상향 */
+      font-weight: 400;
+      color: #93c5fd;             /* 밝은 파랑 */
+      background: #080d14;
+      overflow-y: auto;
+      overflow-x: auto;
+      white-space: pre;
+      line-height: 1.75;          /* 줄 간격 넓게 */
+      letter-spacing: 0.2px;
+    }
+
+    /* 터미널 패널 (아래쪽) */
+    #terminal-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #terminal {
+      flex: 1;
+      padding: 14px 16px;
+      font-family: 'JetBrains Mono', 'Courier New', monospace;
+      font-size: 14px;            /* 터미널 폰트 크기 상향 */
+      font-weight: 400;
+      background: #060b12;
+      overflow-y: auto;
+      line-height: 1.8;           /* 줄 간격 넓게 */
+    }
+
+    /* 터미널 줄 스타일 */
+    .t-line { word-break: break-all; }
+    .t-line.info    { color: var(--info); }
+    .t-line.success { color: var(--accent-hover); }
+    .t-line.error   { color: var(--danger); }
+    .t-line.warning { color: var(--warning); }
+    .t-line.dim     { color: var(--text-muted); }
+    .t-line.normal  { color: var(--text); }
+
+    /* 스크롤바 스타일 (전체) */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 999px;
+    }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+    /* ── Blockly 툴박스 커스터마이징 ────────────────────── */
+    /* 툴박스 전체 너비 확대 */
+    .blocklyToolboxDiv {
+      width: 200px !important;
+    }
+    /* 카테고리 행 높이 및 패딩 확대 */
+    .blocklyToolboxCategory {
+      height: 44px !important;
+      line-height: 44px !important;
+    }
+    /* 카테고리 라벨 텍스트: 검정색 + 굵게 + 크기 확대 */
+    .blocklyTreeLabel {
+      color: #000000 !important;
+      font-weight: 700 !important;
+      font-size: 16px !important;
+      font-family: 'Noto Sans KR', 'Segoe UI', sans-serif !important;
+      letter-spacing: 0.1px;
+    }
+    /* 카테고리 색상 아이콘(왼쪽 사각형) 크기 확대 */
+    .blocklyTreeRowContentContainer {
+      padding: 0 10px !important;
+    }
+    /* 툴박스 내 블록 패널(flyout) 너비 유지 */
+    .blocklyFlyout {
+      border-right: 2px solid var(--border);
+    }
+
+    /* ── 토글 스위치 (Switch) ── */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 22px;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: var(--border);
+      transition: .3s; border-radius: 22px;
+    }
+    .slider:before {
+      position: absolute; content: "";
+      height: 16px; width: 16px; left: 3px; bottom: 3px;
+      background-color: white; transition: .3s; border-radius: 50%;
+    }
+    input:checked + .slider { background-color: var(--info); }
+    input:checked + .slider:before { transform: translateX(22px); }
+
+    /* ── 저장/불러오기 모달 ──────────────────────────────── */
+    #saves-modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.72);
+      z-index: 200;
+      align-items: center; justify-content: center;
+    }
+    #saves-modal-overlay.open { display: flex; }
+    #saves-modal {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+      width: 500px;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    }
+    #saves-modal h2 {
+      margin: 0; font-size: 16px; color: var(--info);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    #saves-modal h2 button {
+      background: none; border: none; color: var(--text-muted);
+      font-size: 20px; cursor: pointer; line-height: 1; padding: 0;
+    }
+    #saves-modal h2 button:hover { color: var(--text); }
+    .modal-section-label {
+      font-size: 12px; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
+    }
+    .modal-input-row {
+      display: flex; gap: 8px;
+    }
+    .modal-input-row input {
+      flex: 1;
+      background: var(--bg); border: 1.5px solid var(--border);
+      color: var(--text); padding: 8px 12px;
+      border-radius: 8px; font-size: 14px; outline: none;
+      font-family: inherit;
+      transition: border-color .2s;
+    }
+    .modal-input-row input:focus { border-color: var(--info); }
+    #saves-list-wrap {
+      flex: 1; overflow-y: auto; min-height: 80px; max-height: 260px;
+    }
+    .save-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 12px; border-radius: 8px; margin-bottom: 5px;
+      background: var(--bg); border: 1px solid var(--border);
+      transition: border-color .15s;
+    }
+    .save-item:hover { border-color: var(--info); }
+    .save-item-name {
+      font-size: 14px; font-weight: 600; color: var(--text);
+      flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .save-item-date { font-size: 11px; color: var(--text-muted); margin: 0 10px; white-space: nowrap; }
+    .save-item-btns { display: flex; gap: 6px; flex-shrink: 0; }
+    .save-item-btns button {
+      padding: 4px 10px; font-size: 12px; font-weight: 600; font-family: inherit;
+      border-radius: 6px; cursor: pointer; border: 1.5px solid transparent; transition: all .15s;
+    }
+    .btn-load-save {
+      background: var(--info-dim); color: var(--info); border-color: var(--info) !important;
+    }
+    .btn-load-save:hover { background: var(--info); color: #fff; }
+    .btn-del-save {
+      background: var(--danger-dim); color: var(--danger); border-color: var(--danger) !important;
+    }
+    .btn-del-save:hover { background: var(--danger); color: #fff; }
+    .saves-empty { color: var(--text-muted); text-align: center; padding: 24px 0; font-size: 14px; }
+    .modal-divider { border: none; border-top: 1px solid var(--border); margin: 0; }
+
+    /* 티칭 버튼 강조 */
+    .btn-teach {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: #fff;
+      box-shadow: 0 2px 10px rgba(245,158,11,0.3);
+    }
+    .btn-teach:hover {
+      background: linear-gradient(135deg, #fbbf24, #f59e0b);
+      box-shadow: 0 4px 16px rgba(245,158,11,0.4);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ====================================================== -->
+<!-- 상단 헤더 바                                           -->
+<!-- ====================================================== -->
+<div id="header">
+  <!-- 타이틀 로고 -->
+  <div class="logo">🤖 Piper 블록 코딩 <span class="logo-badge">v1.0</span></div>
+
+  <!-- CAN 포트 입력 필드: 로봇이 연결된 CAN 인터페이스 이름 입력 -->
+  <!-- 기본값: can0 (단일 로봇). 다중 로봇이면 can1, can2 등 사용 -->
+  <div class="field-group">
+    <label for="canPort">CAN 포트</label>
+    <input id="canPort" value="can0" placeholder="can0" title="CAN 인터페이스 이름 (예: can0)">
+  </div>
+
+  <div style="width: 1px; height: 24px; background: var(--border); margin: 0 4px;"></div>
+
+  <!-- 시뮬레이션 모드 토글 -->
+  <div class="field-group">
+    <label>시뮬레이션</label>
+    <label class="switch">
+      <input type="checkbox" id="simToggle" onchange="toggleSimulation(this.checked)">
+      <span class="slider round"></span>
+    </label>
+  </div>
+
+  <!-- 실행 상태 표시 (대기 중 / 실행 중...) -->
+  <div class="status-pill">
+    <div class="dot" id="statusDot"></div>  <!-- 색상으로 상태 표시 -->
+    <span id="statusText">대기 중</span>
+  </div>
+
+  <!-- 빈 공간 구분자: 버튼들을 오른쪽으로 밀어냄 -->
+  <div class="sep"></div>
+
+  <!-- 티칭 버튼: 현재 로봇 관절값을 읽어 MoveJ 블록으로 삽입 -->
+  <button class="btn btn-teach" onclick="teachPosition()" title="현재 로봇 위치를 MoveJ 블록으로 기록">📌 위치 기록</button>
+
+  <!-- 저장 버튼: 저장/불러오기 모달 열기 -->
+  <button class="btn btn-ghost" onclick="openSavesModal('save')" title="블록 프로그램 저장">💾 저장</button>
+
+  <!-- 불러오기 버튼: 저장/불러오기 모달 열기 -->
+  <button class="btn btn-ghost" onclick="openSavesModal('load')" title="블록 프로그램 불러오기">📂 불러오기</button>
+
+  <!-- 실행 버튼: 블록 → Python 코드 → 서버 전송 → 로봇 실행 -->
+  <button class="btn btn-run"  id="btnRun"  onclick="runCode()">▶ 실행</button>
+
+  <!-- 정지 버튼: 실행 중인 로봇 프로세스 강제 종료 -->
+  <button class="btn btn-stop" id="btnStop" onclick="stopCode()">■ 정지</button>
+
+  <div style="width: 1px; height: 24px; background: var(--border); margin: 0 8px;"></div>
+  
+  <button class="btn btn-stop" style="background: #991b1b; border-color: #ef4444;" onclick="runScript('/estop')" title="하드웨어 강제 정지 스크립트를 즉시 실행합니다.">⛔ E-Stop</button>
+  <button class="btn btn-ghost" style="color: #4ade80; border-color: #4ade80;" onclick="runScript('/erecover')" title="비상 정지 상태를 해제하는 스크립트를 실행합니다.">✅ E-Recover</button>
+
+  <div style="width: 1px; height: 24px; background: var(--border); margin: 0 8px;"></div>
+  <a href="/calibration" target="_blank" class="btn btn-ghost" style="text-decoration: none; padding: 7px 14px; color: var(--warning); border-color: var(--warning);">🎯 캘리브레이션</a>
+  <a href="/dashboard" target="_blank" class="btn btn-run" style="text-decoration: none; padding: 7px 18px; margin-left: auto;">📊 대시보드 열기</a>
+</div>
+
+<!-- ====================================================== -->
+<!-- 메인 바디 (좌: Blockly | 우: 코드+터미널)             -->
+<!-- ====================================================== -->
+<div id="body">
+
+  <!-- 왼쪽: Blockly 작업 영역 -->
+  <div id="blockly-pane">
+    <!-- Blockly.inject()가 이 div 내부에 SVG 블록 편집기를 삽입 -->
+    <div id="blocklyDiv"></div>
+  </div>
+
+  <!-- 오른쪽: 정보 패널 (위=코드 미리보기, 아래=실행 터미널) -->
+  <div id="right-panel">
+
+    <!-- 코드 미리보기 패널 -->
+    <div id="code-panel">
+      <div class="panel-header">
+        📄 생성된 Python 코드
+        <!-- 복사 버튼: 현재 표시된 코드를 클립보드에 복사 -->
+        <button class="mini-btn" onclick="copyCode()">복사</button>
+      </div>
+      <!-- 블록 변경 시 여기에 Python 코드가 자동 업데이트됨 -->
+      <pre id="codeOutput"># 블록을 추가하면 코드가 여기에 표시됩니다</pre>
+    </div>
+
+    <!-- 실행 결과 터미널 패널 -->
+    <div id="terminal-panel">
+      <div class="panel-header">
+        💻 실행 결과
+        <!-- 지우기 버튼: 터미널 출력 내용 초기화 -->
+        <button class="mini-btn" onclick="clearTerminal()">지우기</button>
+      </div>
+      <!-- 실행 중 로봇의 print 출력이 줄 단위로 여기에 추가됨 -->
+      <div id="terminal">
+        <div class="t-line info">Piper 블록 코딩 준비 완료</div>
+        <div class="t-line dim">▶ 실행 버튼을 눌러 로봇을 제어하세요.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<!-- Blockly 툴박스 정의 (XML)                             -->
+<!-- style="display:none" → 화면에 보이지 않음            -->
+<!-- Blockly.inject() 호출 시 toolbox 옵션으로 참조됨      -->
+<!-- ====================================================== -->
+<xml id="toolbox" style="display:none">
+
+  <!-- 카테고리 1: 로봇 기본 제어 블록 -->
+  <category name="🤖 로봇 제어" colour="#3d8b40">
+    <block type="piper_enable"></block>          <!-- 로봇 활성화 -->
+    <block type="piper_home"></block>            <!-- 홈 위치로 이동 -->
+    <block type="piper_emergency_stop"></block>  <!-- 비상 정지 -->
+    <block type="piper_get_pose"></block>        <!-- 현재 좌표 출력 -->
+    <block type="piper_get_joint"></block>       <!-- 현재 관절각 출력 -->
+  </category>
+
+  <!-- 카테고리: 영점 설정 -->
+  <category name="🎯 영점 설정" colour="#c0892a">
+    <block type="piper_set_zero_all"></block>
+    <block type="piper_set_zero_joint">
+      <field name="JOINT_NUM">6</field>
+    </block>
+  </category>
+
+  <!-- 카테고리: 모터 상태 -->
+  <category name="🌡️ 모터 상태" colour="#7a3030">
+    <block type="piper_motor_status"></block>
+    <block type="piper_motor_temps"></block>
+  </category>
+
+  <!-- 카테고리 2: 속도 설정 -->
+  <category name="⚙️ 속도 설정" colour="#4d7fa8">
+    <block type="piper_set_speed">
+      <field name="SPEED">20</field>  <!-- 기본값: 20% -->
+    </block>
+  </category>
+
+  <!-- 카테고리 3: 관절 공간 이동 (MoveJ) -->
+  <category name="🦾 관절 제어 (MoveJ)" colour="#1e6fbf">
+    <block type="piper_movej">
+      <!-- 툴박스에서 드래그할 때의 기본 초기값 -->
+      <field name="J1">0</field><field name="J2">0</field><field name="J3">0</field>
+      <field name="J4">0</field><field name="J5">0</field><field name="J6">0</field>
+    </block>
+  </category>
+
+  <!-- 카테고리 4: 직교 공간 PTP 이동 (MoveP) -->
+  <category name="📍 위치 제어 (MoveP)" colour="#7b3f9e">
+    <block type="piper_movep">
+      <field name="X">0</field><field name="Y">250</field><field name="Z">250</field>
+      <field name="RX">0</field><field name="RY">0</field><field name="RZ">0</field>
+    </block>
+  </category>
+
+  <!-- 카테고리 5: 직교 공간 선형 이동 (MoveL) -->
+  <category name="📏 선형 이동 (MoveL)" colour="#9e3f7b">
+    <block type="piper_movel">
+      <field name="X">0</field><field name="Y">250</field><field name="Z">200</field>
+      <field name="RX">0</field><field name="RY">0</field><field name="RZ">0</field>
+    </block>
+  </category>
+
+  <!-- 카테고리 6: 그리퍼 제어 -->
+  <category name="✋ 그리퍼" colour="#bf7e1e">
+    <block type="piper_gripper_open"></block>   <!-- 완전 열기 (70mm) -->
+    <block type="piper_gripper_close"></block>  <!-- 완전 닫기 (0mm) -->
+    <block type="piper_gripper">
+      <field name="POSITION">35</field>          <!-- 절반 열린 상태 기본값 -->
+    </block>
+  </category>
+
+  <!-- 카테고리 7: 시간 대기 -->
+  <category name="⏱️ 시간" colour="#6b4c2a">
+    <block type="piper_wait">
+      <field name="SECONDS">1</field>  <!-- 기본값: 1초 -->
+    </block>
+  </category>
+
+  <sep></sep>
+  <!-- 구분선: Piper 전용 블록과 표준 Blockly 블록 사이 시각적 구분 -->
+
+  <!-- 카테고리 8: 반복문 (Piper 커스텀 블록) -->
+  <category name="🔄 반복" colour="#5ba55b">
+    <block type="piper_repeat"></block>
+  </category>
+
+  <!-- 카테고리 9: 텍스트 출력 (Blockly 내장) -->
+  <category name="📝 출력" colour="%{BKY_TEXTS_HUE}">
+    <block type="text_print">  <!-- print() 함수 블록 -->
+      <value name="TEXT"><block type="text"><field name="TEXT">메시지</field></block></value>
+    </block>
+    <block type="text"></block>  <!-- 문자열 값 블록 -->
+  </category>
+
+  <!-- 카테고리 10: 수학 계산 (Blockly 내장) -->
+  <category name="🔢 수학" colour="%{BKY_MATH_HUE}">
+    <block type="math_number"><field name="NUM">0</field></block>  <!-- 숫자 값 -->
+    <block type="math_arithmetic"></block>  <!-- 사칙연산 (+, -, ×, ÷) -->
+    <block type="math_round"></block>       <!-- 반올림/올림/내림 -->
+  </category>
+
+  <!-- 카테고리 11: 변수 (Blockly 내장, custom="VARIABLE"로 자동 관리) -->
+  <category name="📦 변수" custom="VARIABLE" colour="%{BKY_VARIABLES_HUE}"></category>
+  <!-- custom="VARIABLE" : 변수 생성/삭제/사용 블록을 Blockly가 자동 생성 -->
+
+</xml>
+
+
+<!-- ====================================================== -->
+<!-- 저장/불러오기 모달                                     -->
+<!-- ====================================================== -->
+<div id="saves-modal-overlay" onclick="handleModalOverlayClick(event)">
+  <div id="saves-modal">
+    <h2>💾 프로그램 저장 / 불러오기
+      <button onclick="closeSavesModal()" title="닫기">✕</button>
+    </h2>
+
+    <!-- 저장 섹션 -->
+    <div>
+      <div class="modal-section-label">이름으로 저장 (서버)</div>
+      <div class="modal-input-row">
+        <input id="save-name-input" placeholder="프로그램 이름..." maxlength="50"
+               onkeydown="if(event.key==='Enter') saveToServer()">
+        <button class="btn btn-run" style="padding:8px 16px; font-size:13px;"
+                onclick="saveToServer()">저장</button>
+        <button class="btn btn-ghost" style="padding:8px 12px; font-size:13px;"
+                title="XML 파일로 내 컴퓨터에 저장" onclick="exportXML()">↓ 파일</button>
+      </div>
+    </div>
+
+    <hr class="modal-divider">
+
+    <!-- 저장 목록 섹션 -->
+    <div style="display:flex; flex-direction:column; flex:1; min-height:0;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <div class="modal-section-label" style="margin:0;">저장된 프로그램</div>
+        <button class="mini-btn" onclick="refreshSavesList()">새로고침</button>
+      </div>
+      <div id="saves-list-wrap">
+        <div id="saves-list"><div class="saves-empty">불러오는 중...</div></div>
+      </div>
+    </div>
+
+    <hr class="modal-divider">
+
+    <!-- 파일 불러오기 -->
+    <button class="btn btn-ghost" style="width:100%; font-size:13px;"
+            onclick="importXML()">📁 내 컴퓨터에서 파일 불러오기 (.xml)</button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// [1] Piper 커스텀 블록 정의
+// ============================================================
+// Blockly.defineBlocksWithJsonArray() : JSON 배열로 여러 블록 타입을 한 번에 등록
+// 각 블록 객체의 주요 속성:
+//   type            : 블록 고유 식별자 (코드 생성기와 동일한 이름으로 연결)
+//   message0~N      : 블록 표시 텍스트 (%1, %2 는 args의 입력 위젯 위치)
+//   args0~N         : message의 %숫자에 대응하는 입력 요소 배열
+//   previousStatement/nextStatement : null → 위/아래 블록 연결 가능 (명령문 블록)
+//   colour          : 블록 색상 (CSS 색상 코드)
+//   tooltip         : 마우스를 올렸을 때 표시되는 설명
+
+Blockly.defineBlocksWithJsonArray([
+
+  // ── 로봇 활성화 블록 ─────────────────────────────────────
+  // 생성 코드: robot_enable()
+  {
+    "type": "piper_enable",           // 블록 타입 ID
+    "message0": "🤖 로봇 활성화",     // 블록에 표시되는 텍스트
+    "previousStatement": null,        // 위쪽 블록과 연결 가능
+    "nextStatement": null,            // 아래쪽 블록과 연결 가능
+    "colour": "#3d8b40",              // 초록 계열 (로봇 제어 카테고리와 통일)
+    "tooltip": "모든 모터를 활성화합니다. 프로그램 시작 시 가장 먼저 실행하세요."
+  },
+
+  // ── 홈 위치 이동 블록 ────────────────────────────────────
+  // 생성 코드: go_home()
+  {
+    "type": "piper_home",
+    "message0": "🏠 홈 위치로 이동",
+    "previousStatement": null, "nextStatement": null,
+    "colour": "#3d8b40",
+    "tooltip": "모든 관절을 0° 위치(홈)로 이동합니다."
+  },
+
+  // ── 비상 정지 블록 ───────────────────────────────────────
+  // 생성 코드: emergency_stop()
+  {
+    "type": "piper_emergency_stop",
+    "message0": "⛔ 비상 정지",
+    "previousStatement": null, "nextStatement": null,
+    "colour": "#b02020",              // 빨간색 (위험 동작 강조)
+    "tooltip": "로봇을 즉시 정지합니다."
+  },
+
+  // ── 위치 좌표 출력 블록 ──────────────────────────────────
+  {
+    "type": "piper_get_pose",
+    "message0": "📍 현재 좌표 출력하기",
+    "previousStatement": null, "nextStatement": null,
+    "colour": "#3d8b40",
+    "tooltip": "로봇 끝단의 현재 X, Y, Z 좌표와 자세를 터미널에 출력합니다."
+  },
+
+  // ── 관절 각도 출력 블록 ──────────────────────────────────
+  {
+    "type": "piper_get_joint",
+    "message0": "🦾 현재 관절각 출력하기",
+    "previousStatement": null, "nextStatement": null,
+    "colour": "#3d8b40",
+    "tooltip": "현재 6개 관절의 각도를 터미널에 출력합니다."
+  },
+
+  // ── 전체 관절 영점 설정 블록 ─────────────────────────────
+  {
+    "type": "piper_set_zero_all",
+    "message0": "🎯 전체 관절 현재 위치를 영점으로 설정",
+    "previousStatement": null, "nextStatement": null,
+    "colour": "#c0892a",
+    "tooltip": "모든 관절(1~6)의 현재 위치를 영점(0°)으로 설정합니다. 실행 후 로봇을 재시작해야 적용됩니다."
+  },
+
+  // ── 특정 관절 영점 설정 블록 ─────────────────────────────
+  {
+    "type": "piper_set_zero_joint",
+    "message0": "🎯 관절 %1 번 현재 위치를 영점으로 설정",
+    "args0": [{"type": "field_number", "name": "JOINT_NUM",
+               "value": 6, "min": 1, "max": 6, "precision": 1}],
+    "previousStatement": null, "nextStatement": null,
+    "colour": "#c0892a",
+    "tooltip": "지정한 관절 번호(1~6)의 현재 위치를 영점(0°)으로 설정합니다. 실행 후 로봇을 재시작해야 적용됩니다."
+  },
+
+  // ── 모터 전체 상태 출력 블록 ─────────────────────────────
+  {
+    "type": "piper_motor_status",
+    "message0": "🌡️ 모터 상태 출력 (전압/온도/전류/에러)",
+    "previousStatement": null, "nextStatement": null,
+    "colour": "#7a3030",
+    "tooltip": "6개 모터의 전압, 드라이버 온도, 모터 온도, 전류, 에러 상태를 터미널에 출력합니다."
+  },
+
+  // ── 모터 온도만 출력 블록 ────────────────────────────────
+  {
+    "type": "piper_motor_temps",
+    "message0": "🌡️ 모터 온도만 출력",
+    "previousStatement": null, "nextStatement": null,
+    "colour": "#7a3030",
+    "tooltip": "6개 모터의 드라이버 온도와 모터 코일 온도만 간단히 출력합니다."
+  },
+
+  // ── 속도 설정 블록 ───────────────────────────────────────
+  // 생성 코드: set_speed(20)
+  // field_number : 숫자 입력 위젯 (블록 내부에 숫자를 직접 입력)
+  {
+    "type": "piper_set_speed",
+    "message0": "⚙️ 속도 설정  %1 %",   // %1 = 첫 번째 args 위젯 위치
+    "args0": [{"type": "field_number", "name": "SPEED",
+               "value": 20, "min": 1, "max": 100, "precision": 1}],
+    // field_number 속성:
+    //   name      : 코드 생성기에서 getFieldValue('SPEED')로 읽는 키
+    //   value     : 기본값
+    //   min/max   : 입력 가능 범위
+    //   precision : 입력 단위 (1 → 정수만)
+    "previousStatement": null, "nextStatement": null,
+    "colour": "#4d7fa8",
+    "tooltip": "이동 속도를 설정합니다 (1~100%). 이후 MoveJ/MoveP/MoveL에 적용됩니다."
+  },
+
+  // ── MoveJ 블록 (관절 공간 이동) ──────────────────────────
+  // 생성 코드: movej(j1, j2, j3, j4, j5, j6, gripper)
+  // message0~3 을 여러 개 사용 → 블록 내부가 여러 행으로 표시됨
+  {
+    "type": "piper_movej",
+    "message0": "🦾 관절 제어 (MoveJ)",    // 1행: 블록 제목
+    "message1": " J1 %1 °    J2 %2 °    J3 %3 °",  // 2행: J1~J3
+    "args1": [
+      {"type": "field_number", "name": "J1", "value": 0, "min": -175, "max": 175, "precision": 0.1},
+      {"type": "field_number", "name": "J2", "value": 0, "min": -175, "max": 175, "precision": 0.1},
+      {"type": "field_number", "name": "J3", "value": 0, "min": -175, "max": 175, "precision": 0.1}
+    ],
+    "message2": " J4 %1 °    J5 %2 °    J6 %3 °",  // 3행: J4~J6
+    "args2": [
+      {"type": "field_number", "name": "J4", "value": 0, "min": -175, "max": 175, "precision": 0.1},
+      {"type": "field_number", "name": "J5", "value": 0, "min": -175, "max": 175, "precision": 0.1},
+      {"type": "field_number", "name": "J6", "value": 0, "min": -175, "max": 175, "precision": 0.1}
+    ],
+    "previousStatement": null, "nextStatement": null,
+    "colour": "#1e6fbf",
+    "tooltip": "6개 관절 각도(°)로 로봇을 이동합니다."
+  },
+
+  // ── MoveP 블록 (직교 공간 PTP 이동) ──────────────────────
+  // 생성 코드: movep(x, y, z, rx, ry, rz, gripper)
+  // [수정 9] X/Y/Z min/max 추가 — 물리적 작업 공간 초과 방지 (Piper 최대 도달거리 ≈ 700mm)
+  {
+    "type": "piper_movep",
+    "message0": "📍 위치 제어 PTP (MoveP)",
+    "message1": " X %1 mm    Y %2 mm    Z %3 mm",
+    "args1": [
+      {"type": "field_number", "name": "X", "value": 0,   "min": -700, "max": 700, "precision": 0.1},
+      {"type": "field_number", "name": "Y", "value": 250, "min": -700, "max": 700, "precision": 0.1},
+      {"type": "field_number", "name": "Z", "value": 250, "min": -100, "max": 900, "precision": 0.1}
+    ],
+    "message2": " RX %1 °    RY %2 °    RZ %3 °",
+    "args2": [
+      {"type": "field_number", "name": "RX", "value": 0, "min": -180, "max": 180, "precision": 0.1},
+      {"type": "field_number", "name": "RY", "value": 0, "min": -180, "max": 180, "precision": 0.1},
+      {"type": "field_number", "name": "RZ", "value": 0, "min": -180, "max": 180, "precision": 0.1}
+    ],
+    "previousStatement": null, "nextStatement": null,
+    "colour": "#7b3f9e",
+    "tooltip": "3D 위치(mm)와 자세(°)로 로봇 엔드 이펙터를 이동합니다. (PTP 경로)\nX/Y: ±700mm, Z: -100~900mm, 자세: ±180°"
+  },
+
+  // ── MoveL 블록 (직교 공간 선형 이동) ─────────────────────
+  // 생성 코드: movel(x, y, z, rx, ry, rz, gripper)
+  // [수정 9] MoveP와 동일한 범위 제한 적용
+  {
+    "type": "piper_movel",
+    "message0": "📏 선형 이동 (MoveL)",
+    "message1": " X %1 mm    Y %2 mm    Z %3 mm",
+    "args1": [
+      {"type": "field_number", "name": "X", "value": 0,   "min": -700, "max": 700, "precision": 0.1},
+      {"type": "field_number", "name": "Y", "value": 250, "min": -700, "max": 700, "precision": 0.1},
+      {"type": "field_number", "name": "Z", "value": 200, "min": -100, "max": 900, "precision": 0.1}
+    ],
+    "message2": " RX %1 °    RY %2 °    RZ %3 °",
+    "args2": [
+      {"type": "field_number", "name": "RX", "value": 0, "min": -180, "max": 180, "precision": 0.1},
+      {"type": "field_number", "name": "RY", "value": 0, "min": -180, "max": 180, "precision": 0.1},
+      {"type": "field_number", "name": "RZ", "value": 0, "min": -180, "max": 180, "precision": 0.1}
+    ],
+    "previousStatement": null, "nextStatement": null,
+    "colour": "#9e3f7b",
+    "tooltip": "직선 경로로 엔드 이펙터를 이동합니다. (선형 보간)\nX/Y: ±700mm, Z: -100~900mm, 자세: ±180°"
+  },
+
+  // ── 그리퍼 열기 블록 ─────────────────────────────────────
+  // 생성 코드: gripper_ctrl(70)
+  {
+    "type": "piper_gripper_open",
+    "message0": "✋ 그리퍼 열기 (70 mm)",
+    "previousStatement": null, "nextStatement": null,
+    "colour": "#bf7e1e",
+    "tooltip": "그리퍼를 완전히 엽니다."
+  },
+
+  // ── 그리퍼 닫기 블록 ─────────────────────────────────────
+  // 생성 코드: gripper_ctrl(0)
+  {
+    "type": "piper_gripper_close",
+    "message0": "✊ 그리퍼 닫기 (0 mm)",
+    "previousStatement": null, "nextStatement": null,
+    "colour": "#bf7e1e",
+    "tooltip": "그리퍼를 완전히 닫습니다."
+  },
+
+  // ── 그리퍼 위치 지정 블록 ────────────────────────────────
+  // 생성 코드: gripper_ctrl(35)  ← 입력값에 따라 변동
+  {
+    "type": "piper_gripper",
+    "message0": "✋ 그리퍼  %1 mm",
+    "args0": [{"type": "field_number", "name": "POSITION",
+               "value": 35, "min": 0, "max": 70, "precision": 0.1}],
+    "previousStatement": null, "nextStatement": null,
+    "colour": "#bf7e1e",
+    "tooltip": "그리퍼 위치를 지정합니다 (0mm=닫힘, 70mm=열림)."
+  },
+
+  // ── 대기 블록 ────────────────────────────────────────────
+  // 생성 코드: time.sleep(1.0)
+  // [수정 8] max=300 추가 — 무제한 대기로 서버 프로세스 점유 방지
+  {
+    "type": "piper_wait",
+    "message0": "⏱️  %1 초 대기",
+    "args0": [{"type": "field_number", "name": "SECONDS",
+               "value": 1, "min": 0, "max": 300, "precision": 0.1}],
+    "previousStatement": null, "nextStatement": null,
+    "colour": "#6b4c2a",
+    "tooltip": "지정한 시간(초) 동안 대기합니다. (최대 300초)"
+  },
+
+  // ── 단순 반복문 블록 ──────────────────────────────────────
+  {
+    "type": "piper_repeat",
+    "message0": "🔄 %1 번 반복하기",
+    "args0": [{"type": "field_number", "name": "TIMES", "value": 10, "min": 1, "max": 1000, "precision": 1}],
+    "message1": "실행할 동작 %1",
+    "args1": [{"type": "input_statement", "name": "DO"}],
+    "previousStatement": null, "nextStatement": null,
+    "colour": "#5ba55b",
+    "tooltip": "안에 있는 블록들을 지정한 횟수만큼 반복해서 실행합니다."
+  }
+]);
+
+// ============================================================
+// [2] Python 코드 생성기 등록
+// ============================================================
+// Blockly.Python['블록타입'] = function(block) { return '코드문자열\n'; }
+// workspaceToCode() 호출 시 각 블록마다 이 함수가 실행되어 코드를 조합함
+// b.getFieldValue('필드명') : 블록의 입력 위젯에서 현재 값을 읽어옴
+
+// 인수 없는 단순 함수 호출 블록들
+Blockly.Python['piper_enable']         = () => 'robot_enable()\n';
+Blockly.Python['piper_home']           = () => 'go_home()\n';
+Blockly.Python['piper_emergency_stop'] = () => 'emergency_stop()\n';
+Blockly.Python['piper_get_pose']       = () => 'print_current_pose()\n';
+Blockly.Python['piper_get_joint']      = () => 'print_current_joint()\n';
+Blockly.Python['piper_set_zero_all']   = () => 'set_zero_all()\n';
+Blockly.Python['piper_motor_status']   = () => 'print_motor_status()\n';
+Blockly.Python['piper_motor_temps']    = () => 'print_motor_temps()\n';
+
+// 특정 관절 영점 설정: set_zero_joint(번호)
+Blockly.Python['piper_set_zero_joint'] = b =>
+  'set_zero_joint(' + b.getFieldValue('JOINT_NUM') + ')\n';
+
+// 속도 설정: set_speed(값)
+Blockly.Python['piper_set_speed'] = b =>
+  'set_speed(' + b.getFieldValue('SPEED') + ')\n';
+
+// MoveJ: movej(j1, j2, j3, j4, j5, j6)
+Blockly.Python['piper_movej'] = b =>
+  'movej(' +
+  [b.getFieldValue('J1'), b.getFieldValue('J2'), b.getFieldValue('J3'),
+   b.getFieldValue('J4'), b.getFieldValue('J5'), b.getFieldValue('J6')].join(', ') +
+  ')\n';
+
+// MoveP: movep(x, y, z, rx, ry, rz)
+Blockly.Python['piper_movep'] = b =>
+  'movep(' +
+  [b.getFieldValue('X'), b.getFieldValue('Y'), b.getFieldValue('Z'),
+   b.getFieldValue('RX'), b.getFieldValue('RY'), b.getFieldValue('RZ')].join(', ') +
+  ')\n';
+
+// MoveL: movel(x, y, z, rx, ry, rz)
+Blockly.Python['piper_movel'] = b =>
+  'movel(' +
+  [b.getFieldValue('X'), b.getFieldValue('Y'), b.getFieldValue('Z'),
+   b.getFieldValue('RX'), b.getFieldValue('RY'), b.getFieldValue('RZ')].join(', ') +
+  ')\n';
+
+// 그리퍼 단축 블록 (고정값)
+Blockly.Python['piper_gripper_open']  = () => 'gripper_ctrl(70)\n';
+Blockly.Python['piper_gripper_close'] = () => 'gripper_ctrl(0)\n';
+
+// 그리퍼 위치 블록 (가변값)
+Blockly.Python['piper_gripper'] = b =>
+  'gripper_ctrl(' + b.getFieldValue('POSITION') + ')\n';
+
+// 대기: time.sleep(초)
+Blockly.Python['piper_wait'] = b =>
+  'time.sleep(' + b.getFieldValue('SECONDS') + ')\n';
+
+// 단순 반복문 (for _ in range(N):)
+Blockly.Python['piper_repeat'] = function(block) {
+  var times = block.getFieldValue('TIMES');
+  var branch = Blockly.Python.statementToCode(block, 'DO') || '  pass\n';
+  return 'for _ in range(' + times + '):\n' + branch;
+};
+
+// E-Stop 및 E-Recover 스크립트 전용 실행
+function runScript(endpoint) {
+  const name = endpoint === '/estop' ? '비상 정지(E-Stop)' : '정지 해제(E-Recover)';
+  const term = document.getElementById('terminal');
+  const div = document.createElement('div');
+  div.className = 't-line warning';
+  div.textContent = `[시스템명령] ${name} 스크립트를 하드웨어로 실행합니다...`;
+  term.appendChild(div);
+  term.scrollTop = term.scrollHeight;
+  
+  fetch(endpoint, { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status !== 'ok') {
+        const err = document.createElement('div');
+        err.className = 't-line error';
+        err.textContent = `[오류] ${data.message}`;
+        term.appendChild(err);
+      } else {
+        const suc = document.createElement('div');
+        suc.className = 't-line success';
+        suc.textContent = `[완료] ${name} 명령이 로봇에 전달되었습니다.`;
+        term.appendChild(suc);
+      }
+      term.scrollTop = term.scrollHeight;
+    }).catch(err => {
+      const errDiv = document.createElement('div');
+      errDiv.className = 't-line error';
+      errDiv.textContent = `[오류] 서버 통신 실패`;
+      term.appendChild(errDiv);
+      term.scrollTop = term.scrollHeight;
+    });
+}
+
+// ============================================================
+// [3] Blockly 워크스페이스 초기화
+// ============================================================
+const workspace = Blockly.inject('blocklyDiv', {
+  // Blockly 편집기를 id="blocklyDiv" 요소 안에 삽입
+
+  toolbox: document.getElementById('toolbox'),
+  // 위에서 정의한 XML 툴박스를 연결
+
+  theme: Blockly.Themes.Dark,
+  // 다크 테마 적용 (페이지 배경과 통일)
+
+  grid: {
+    spacing: 24,          // 격자 점 간격 (px)
+    length: 3,            // 격자 점 크기
+    colour: '#1e2530',    // 격자 점 색상
+    snap: true            // 블록이 격자에 자동 정렬됨
+  },
+
+  zoom: {
+    controls: true,       // 워크스페이스에 +/- 줌 버튼 표시
+    wheel: true,          // 마우스 휠로 줌 가능
+    startScale: 1.0,      // 초기 배율
+    maxScale: 3,          // 최대 확대 배율
+    minScale: 0.3,        // 최소 축소 배율
+    scaleSpeed: 1.2       // 줌 속도
+  },
+
+  trashcan: true,         // 삭제 트래시캔 아이콘 표시
+  scrollbars: true        // 워크스페이스 스크롤바 표시
+});
+
+// ── 시작 시 localStorage 복원 or 기본 프로그램 삽입 ──────
+(function restoreOrDefault() {
+  const LS_KEY = 'piper_ws_autosave';
+
+  // localStorage에 저장된 워크스페이스가 있으면 우선 복원
+  const saved = localStorage.getItem(LS_KEY);
+  if (saved) {
+    try {
+      Blockly.Xml.domToWorkspace(Blockly.Xml.textToDom(saved), workspace);
+      return;  // 복원 성공 → 기본 프로그램 삽입 건너뜀
+    } catch(e) {
+      localStorage.removeItem(LS_KEY);  // 손상된 데이터 삭제
+      console.warn('Auto-save restore failed, loading default:', e);
+    }
+  }
+
+  // 저장된 데이터 없으면 기본 예제 프로그램 삽입
+  const xml = `<xml>
+    <block type="piper_enable" x="30" y="30">
+      <next><block type="piper_home">
+        <next><block type="piper_wait">
+          <field name="SECONDS">1</field>
+          <next><block type="piper_movej">
+            <field name="J1">30</field><field name="J2">-30</field><field name="J3">60</field>
+            <field name="J4">0</field><field name="J5">30</field><field name="J6">0</field>
+            <next><block type="piper_wait">
+              <field name="SECONDS">1</field>
+              <next><block type="piper_home"></block></next>
+            </block></next>
+          </block></next>
+        </block></next>
+      </block></next>
+    </block>
+  </xml>`;
+  try {
+    Blockly.Xml.domToWorkspace(Blockly.Xml.textToDom(xml), workspace);
+  } catch(e) {
+    console.warn('Default program load failed:', e);
+  }
+})();
+
+// ── 워크스페이스 변경 감지 → 코드 패널 갱신 + localStorage 자동저장 ──
+const LS_KEY = 'piper_ws_autosave';
+workspace.addChangeListener(() => {
+  try {
+    const code = Blockly.Python.workspaceToCode(workspace);
+    document.getElementById('codeOutput').textContent =
+      code.trim() ? code : '# 블록을 추가하면 코드가 표시됩니다';
+    // localStorage 자동저장 (새로고침해도 작업 유지)
+    localStorage.setItem(LS_KEY, Blockly.Xml.domToText(Blockly.Xml.workspaceToDom(workspace)));
+  } catch(e) {
+    console.error(e);
+  }
+});
+
+// ============================================================
+// [4] Socket.IO 실시간 통신
+// ============================================================
+const socket = io();
+// Socket.IO 클라이언트 초기화 (자동으로 현재 서버 주소에 연결)
+
+// 서버 연결 성공 이벤트
+socket.on('connect', () => addLine('서버에 연결되었습니다.', 'info'));
+
+// 서버 연결 끊김 이벤트 (서버 종료, 네트워크 오류 등)
+socket.on('disconnect', () => {
+  addLine('서버 연결이 끊어졌습니다.', 'error');
+  setRunning(false);  // UI를 대기 상태로 복원
+});
+
+// 로봇 프로세스 출력 수신 이벤트 ('output')
+// server.py의 socketio.emit('output', {'data': line}) 에 대응
+socket.on('output', data => {
+  const line = data.data || '';
+  let cls = 'normal';  // 기본 스타일: 흰색 텍스트
+
+  // 출력 내용에 따라 색상 분류
+  if (/완료|Reach|도달/.test(line))               cls = 'success';  // 초록
+  else if (/오류|Error|Traceback|fail/i.test(line)) cls = 'error';   // 빨강
+  else if (/경고|warning|초과/i.test(line))         cls = 'warning'; // 노랑
+  else if (/MoveJ|MoveP|MoveL|그리퍼|속도|홈|연결/.test(line)) cls = 'info'; // 파랑
+
+  addLine(line, cls);  // 터미널 패널에 줄 추가
+});
+
+// 실행 완료/종료 이벤트 ('done')
+// server.py의 socketio.emit('done', {...}) 에 대응
+socket.on('done', data => {
+  setRunning(false);                              // UI 대기 상태로 복원
+  const ok = data.returncode === 0;              // 정상 종료 여부 (0=정상)
+  addLine((ok ? '✅ ' : '❌ ') + (data.message || '실행 종료'),
+          ok ? 'success' : 'error');             // 결과 메시지 표시
+  addLine('─'.repeat(44), 'dim');               // 구분선 출력
+});
+
+// ============================================================
+// [5] UI 상태 관리 함수
+// ============================================================
+let running = false;  // 현재 실행 중 여부 추적 변수
+
+function setRunning(r) {
+  /**
+   * 실행 상태에 따라 UI 요소를 업데이트
+   * @param {boolean} r - true: 실행 중 / false: 대기 중
+   */
+  running = r;
+  const dot  = document.getElementById('statusDot');   // 상태 표시 원
+  const text = document.getElementById('statusText');  // 상태 텍스트
+  const btn  = document.getElementById('btnRun');      // 실행 버튼
+
+  dot.className    = 'dot' + (r ? ' running' : '');   // 초록 글로우 추가/제거
+  text.textContent = r ? '실행 중...' : '대기 중';    // 상태 텍스트 변경
+  btn.disabled     = r;  // 실행 중에는 중복 실행 방지 (버튼 비활성화)
+}
+
+function addLine(text, cls = 'normal') {
+  /**
+   * 터미널 패널에 새 줄을 추가하고 자동 스크롤
+   * @param {string} text - 표시할 텍스트
+   * @param {string} cls  - CSS 클래스 (info/success/error/warning/dim/normal)
+   */
+  const term = document.getElementById('terminal');
+  const div  = document.createElement('div');  // 새 div 요소 생성
+  div.className   = 't-line ' + cls;           // 스타일 클래스 설정
+  div.textContent = text;                       // 텍스트 삽입 (XSS 방지: innerHTML 대신 사용)
+  term.appendChild(div);                        // 터미널 끝에 추가
+  term.scrollTop = term.scrollHeight;           // 항상 최하단으로 스크롤
+}
+
+function clearTerminal() {
+  /** 터미널 패널의 모든 출력 내용을 삭제 */
+  document.getElementById('terminal').innerHTML = '';
+}
+
+function copyCode() {
+  /** 코드 패널의 Python 코드를 클립보드에 복사 */
+  const code = document.getElementById('codeOutput').textContent;
+  navigator.clipboard.writeText(code)
+    .then(() => addLine('코드가 클립보드에 복사되었습니다.', 'info'))
+    .catch(() => addLine('클립보드 복사 실패.', 'error'));
+  // clipboard API는 HTTPS 또는 localhost에서만 동작
+}
+
+let isSimulationMode = false;
+
+async function toggleSimulation(enable) {
+  try {
+    const r = await fetch('/toggle_sim', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ enable })
+    });
+    const res = await r.json();
+    isSimulationMode = res.is_simulation;
+    
+    const status = isSimulationMode ? '활성화' : '비활성화';
+    const cls = isSimulationMode ? 'info' : 'warning';
+    addLine(`[시스템] 시뮬레이션 모드가 ${status}되었습니다.`, cls);
+    
+    if (isSimulationMode) {
+      document.getElementById('canPort').disabled = true;
+      document.getElementById('canPort').style.opacity = '0.5';
+    } else {
+      document.getElementById('canPort').disabled = false;
+      document.getElementById('canPort').style.opacity = '1';
+    }
+  } catch(e) {
+    addLine('시뮬레이션 모드 전환 실패: ' + e.message, 'error');
+    document.getElementById('simToggle').checked = !enable;
+  }
+}
+
+// 초기 상태 로드
+fetch('/get_sim_status')
+  .then(r => r.json())
+  .then(data => {
+    isSimulationMode = data.is_simulation;
+    document.getElementById('simToggle').checked = isSimulationMode;
+    if (isSimulationMode) {
+      document.getElementById('canPort').disabled = true;
+      document.getElementById('canPort').style.opacity = '0.5';
+    }
+  });
+
+async function runCode() {
+  /**
+   * [실행 버튼] 클릭 핸들러
+   * 1. 블록 → Python 코드 변환
+   * 2. POST /run 으로 코드와 CAN 포트 전송
+   * 3. 서버에서 subprocess로 코드 실행 → WebSocket으로 출력 수신
+   */
+  const code = Blockly.Python.workspaceToCode(workspace).trim();
+  if (!code) {
+    addLine('실행할 블록이 없습니다.', 'warning');
+    return;  // 빈 워크스페이스면 중단
+  }
+
+  const canPort = document.getElementById('canPort').value.trim() || 'can0';
+  // CAN 포트 입력값 읽기 (비어있으면 'can0' 기본값 사용)
+
+  addLine('─'.repeat(44), 'dim');  // 실행 구분선
+  if (isSimulationMode) {
+    addLine('▶ 시뮬레이션 실행 시작 (가상 로봇)', 'info');
+  } else {
+    addLine('▶ 실행 시작 (CAN 포트: ' + canPort + ')', 'info');
+  }
+  setRunning(true);  // UI를 실행 중 상태로 전환
+
+  try {
+    const r = await fetch('/run', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ code, can_port: canPort })
+      // { code: "movej(...)\n...", can_port: "can0" }
+    });
+    const res = await r.json();  // 서버 응답 JSON 파싱
+    if (res.status === 'error') {
+      addLine('❌ ' + res.message, 'error');
+      setRunning(false);  // 즉시 오류 시 대기 상태로 복원
+    }
+    // 정상 시작 시 setRunning(false)는 'done' 이벤트가 호출함
+  } catch(e) {
+    addLine('❌ 서버 오류: ' + e.message, 'error');
+    setRunning(false);
+  }
+}
+
+async function stopCode() {
+  /**
+   * [정지 버튼] 클릭 핸들러
+   * POST /stop → 서버에서 subprocess.terminate() 호출
+   */
+  try {
+    await fetch('/stop', { method: 'POST' });
+    setRunning(false);  // UI 즉시 대기 상태로 변경 (서버 응답 대기 없이)
+  } catch(e) {
+    addLine('정지 명령 실패: ' + e.message, 'error');
+  }
+}
+
+// ============================================================
+// [6] 저장/불러오기 모달
+// ============================================================
+
+function _getWorkspaceXml() {
+  return Blockly.Xml.domToText(Blockly.Xml.workspaceToDom(workspace));
+}
+
+function _loadXmlToWorkspace(xmlText, label) {
+  workspace.clear();
+  Blockly.Xml.domToWorkspace(Blockly.Xml.textToDom(xmlText), workspace);
+  addLine('"' + label + '" 불러오기 완료', 'success');
+}
+
+function openSavesModal(focus) {
+  document.getElementById('saves-modal-overlay').classList.add('open');
+  refreshSavesList();
+  if (focus === 'save') {
+    // 저장 탭 포커스: 이름 입력창에 현재 자동저장 이름 힌트 넣기
+    const input = document.getElementById('save-name-input');
+    if (!input.value) input.focus();
+  }
+}
+
+function closeSavesModal() {
+  document.getElementById('saves-modal-overlay').classList.remove('open');
+}
+
+function handleModalOverlayClick(e) {
+  if (e.target === document.getElementById('saves-modal-overlay')) closeSavesModal();
+}
+
+async function refreshSavesList() {
+  const list = document.getElementById('saves-list');
+  list.innerHTML = '<div class="saves-empty">불러오는 중...</div>';
+  try {
+    const r = await fetch('/api/saves');
+    const saves = await r.json();
+    if (!saves.length) {
+      list.innerHTML = '<div class="saves-empty">저장된 프로그램이 없습니다.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    for (const s of saves) {
+      const date = new Date(s.mtime * 1000).toLocaleString('ko-KR', {
+        month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+      });
+      const item = document.createElement('div');
+      item.className = 'save-item';
+      item.innerHTML = `
+        <span class="save-item-name" title="${s.name}">${s.name}</span>
+        <span class="save-item-date">${date}</span>
+        <div class="save-item-btns">
+          <button class="btn-load-save" onclick="loadFromServer(${JSON.stringify(s.name)})">불러오기</button>
+          <button class="btn-del-save"  onclick="deleteFromServer(${JSON.stringify(s.name)}, this)">삭제</button>
+        </div>`;
+      list.appendChild(item);
+    }
+  } catch(e) {
+    list.innerHTML = '<div class="saves-empty" style="color:var(--danger)">목록 로드 실패</div>';
+  }
+}
+
+async function saveToServer() {
+  const name = document.getElementById('save-name-input').value.trim();
+  if (!name) { addLine('프로그램 이름을 입력하세요.', 'warning'); return; }
+  try {
+    const xml = _getWorkspaceXml();
+    const r = await fetch('/api/saves', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ name, xml })
+    });
+    const res = await r.json();
+    if (res.status !== 'ok') { addLine('저장 실패: ' + res.message, 'error'); return; }
+    addLine('"' + name + '" 저장 완료', 'success');
+    refreshSavesList();
+  } catch(e) {
+    addLine('저장 실패: ' + e.message, 'error');
+  }
+}
+
+async function loadFromServer(name) {
+  try {
+    const r = await fetch('/api/saves/' + encodeURIComponent(name));
+    const res = await r.json();
+    if (res.status !== 'ok') { addLine('불러오기 실패: ' + res.message, 'error'); return; }
+    _loadXmlToWorkspace(res.xml, name);
+    closeSavesModal();
+  } catch(e) {
+    addLine('불러오기 실패: ' + e.message, 'error');
+  }
+}
+
+async function deleteFromServer(name, btn) {
+  if (!confirm('"' + name + '" 을(를) 삭제하시겠습니까?')) return;
+  btn.disabled = true;
+  try {
+    await fetch('/api/saves/' + encodeURIComponent(name), { method: 'DELETE' });
+    addLine('"' + name + '" 삭제 완료', 'dim');
+    refreshSavesList();
+  } catch(e) {
+    addLine('삭제 실패: ' + e.message, 'error');
+    btn.disabled = false;
+  }
+}
+
+function exportXML() {
+  try {
+    const xmlText = _getWorkspaceXml();
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(new Blob([xmlText], { type: 'text/xml' })),
+      download: (document.getElementById('save-name-input').value.trim() || 'piper_program') + '.xml'
+    });
+    a.click();
+    addLine('파일로 내보내기 완료', 'success');
+  } catch(e) {
+    addLine('내보내기 실패: ' + e.message, 'error');
+  }
+}
+
+function importXML() {
+  const input = Object.assign(document.createElement('input'), { type: 'file', accept: '.xml' });
+  input.onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        _loadXmlToWorkspace(ev.target.result, file.name);
+        closeSavesModal();
+      } catch(err) {
+        addLine('파일 불러오기 실패: ' + err.message, 'error');
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+// 기존 버튼 호환성 유지 (직접 호출 시)
+function saveWorkspace() { openSavesModal('save'); }
+function loadWorkspace() { openSavesModal('load'); }
+
+// ============================================================
+// [7] 티칭: 현재 위치 기록
+// ============================================================
+async function teachPosition() {
+  try {
+    const resp = await fetch('/capture');
+    const data = await resp.json();
+
+    if (!data.joints || data.joints.length < 6) {
+      addLine('📌 위치 읽기 실패: 로봇이 연결되지 않았거나 시뮬레이션이 아닙니다.', 'error');
+      return;
+    }
+
+    const j = data.joints.map(v => parseFloat(v.toFixed(1)));
+
+    // Blockly API로 movej 블록 생성
+    const block = workspace.newBlock('piper_movej');
+    ['J1','J2','J3','J4','J5','J6'].forEach((f, i) => block.setFieldValue(String(j[i]), f));
+    block.initSvg();
+    block.render();
+
+    // 현재 워크스페이스에서 가장 긴 체인의 마지막 블록에 연결 시도
+    let tail = null;
+    let bestLen = -1;
+    for (const top of workspace.getTopBlocks(false)) {
+      // 자기 자신(방금 만든 블록)은 제외
+      if (top === block) continue;
+      let b = top, len = 0;
+      while (b.getNextBlock()) { b = b.getNextBlock(); len++; }
+      if (len > bestLen && b.nextConnection && !b.nextConnection.isConnected()) {
+        bestLen = len; tail = b;
+      }
+    }
+
+    if (tail && block.previousConnection) {
+      block.previousConnection.connect(tail.nextConnection);
+    }
+    // 연결 실패 시 블록은 (0,0)에 독립적으로 배치됨 — 사용자가 드래그 가능
+
+    workspace.centerOnBlock(block.id);
+
+    const src = data.mode === 'simulation' ? '[시뮬레이션]' : '[실제 로봇]';
+    addLine(`📌 ${src} 위치 기록: J1=${j[0]}° J2=${j[1]}° J3=${j[2]}° J4=${j[3]}° J5=${j[4]}° J6=${j[5]}°`, 'success');
+
+  } catch(e) {
+    addLine('📌 위치 기록 실패: ' + e.message, 'error');
+  }
+}
+</script>
+</body>
+</html>

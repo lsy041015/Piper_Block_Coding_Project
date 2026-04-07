@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>로봇 실시간 대시보드</title>
+  <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cannon@0.6.2/build/cannon.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f16;
+      --card: #141a24;
+      --text: #e2e8f0;
+      --accent: #3b82f6;
+      --green: #22c55e;
+      --red: #ef4444;
+      --border: #2a3550;
+      --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      background: var(--bg); color: var(--text); font-family: 'Noto Sans KR', sans-serif;
+      margin: 0; padding: 20px; height: 100vh; display: flex; flex-direction: column; gap: 16px;
+    }
+    .header {
+      display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 2px solid var(--border); padding-bottom: 12px; flex-shrink: 0;
+    }
+    .header h1 { margin: 0; font-size: 22px; color: #fff; }
+    .status-badge {
+      padding: 7px 14px; border-radius: 999px; font-weight: 600; font-size: 14px;
+      display: inline-flex; align-items: center; gap: 8px; border: 1.5px solid var(--border);
+      background: var(--card);
+    }
+    .dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+    .dot.connected  { background: var(--green); box-shadow: 0 0 10px var(--green); }
+    .dot.simulation { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+    .dot.error      { background: var(--red);   box-shadow: 0 0 10px var(--red); }
+
+    /* ── 메인 레이아웃 ── */
+    .main-area {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 16px;
+      flex: 1;
+      min-height: 0;
+    }
+    .left-panels { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+    .card {
+      background: var(--card); border: 1.5px solid var(--border); border-radius: 10px; padding: 18px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    }
+    .card h2 { margin: 0 0 12px 0; font-size: 15px; border-bottom: 1.5px solid var(--border); padding-bottom: 10px; color: var(--accent); }
+    .data-row {
+      display: flex; justify-content: space-between; margin: 8px 0; font-family: var(--font-mono); font-size: 14px;
+      padding: 6px 10px; background: rgba(0,0,0,0.2); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);
+    }
+    .data-row span:first-child { color: #94a3b8; font-size: 13px; font-family: 'Noto Sans KR', sans-serif; }
+    .val { color: #fff; font-weight: 600; text-shadow: 0 0 6px rgba(255,255,255,0.3); }
+
+    /* ── 3D 뷰어 ── */
+    .viewer-card {
+      background: var(--card); border: 1.5px solid var(--border); border-radius: 10px;
+      display: flex; flex-direction: column; overflow: hidden; position: relative;
+    }
+    .viewer-header {
+      padding: 12px 18px; border-bottom: 1.5px solid var(--border); font-size: 15px;
+      color: var(--accent); font-weight: 600; display: flex; justify-content: space-between; align-items: center;
+      flex-shrink: 0;
+    }
+    .viewer-hint { font-size: 12px; color: #64748b; font-weight: 400; }
+    #robot-canvas { width: 100% !important; height: 100% !important; display: block; }
+    .canvas-wrap { flex: 1; min-height: 0; position: relative; }
+
+    /* ── 로딩 오버레이 ── */
+    #loading-overlay {
+      position: absolute; inset: 0;
+      background: rgba(11,15,22,0.93);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 10; gap: 14px;
+    }
+    .loading-spinner {
+      width: 42px; height: 42px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading-text  { color: var(--text); font-size: 14px; font-weight: 600; }
+    #loading-bar-wrap {
+      width: 200px; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden;
+    }
+    #loading-bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.15s ease; }
+    #loading-count { color: #64748b; font-size: 12px; font-family: var(--font-mono); }
+
+    /* ── 로그 ── */
+    .log-section { flex-shrink: 0; }
+    .logs {
+      background: #060b12; padding: 12px; border-radius: 8px; height: 120px; overflow-y: auto;
+      font-family: var(--font-mono); font-size: 13px; line-height: 1.6; border: 1px solid var(--border);
+    }
+    .log-info  { color: #93c5fd; }
+    .log-error { color: var(--red); font-weight: 600; }
+
+    /* ── 물리 엔진 컨트롤 바 ── */
+    .physics-bar {
+      padding: 7px 14px; border-bottom: 1.5px solid var(--border);
+      display: flex; align-items: center; gap: 9px; flex-shrink: 0;
+      background: rgba(0,0,0,0.18); flex-wrap: wrap;
+    }
+    .physics-bar label {
+      font-size: 12px; color: #94a3b8; display: flex; align-items: center;
+      gap: 5px; cursor: pointer; user-select: none; font-weight: 600;
+    }
+    .physics-bar input[type=checkbox] { accent-color: var(--accent); width: 13px; height: 13px; }
+    .phys-btn {
+      padding: 3px 9px; border-radius: 6px; font-size: 12px; font-weight: 600;
+      border: 1.5px solid var(--border); background: rgba(255,255,255,0.04);
+      color: var(--text); cursor: pointer; transition: all .12s; font-family: inherit;
+    }
+    .phys-btn:hover { background: rgba(59,130,246,0.18); border-color: var(--accent); color: #fff; }
+    .phys-btn.red-btn:hover { background: rgba(239,68,68,0.18); border-color: var(--red); }
+    .phys-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .phys-sep { width: 1px; height: 18px; background: var(--border); margin: 0 1px; flex-shrink: 0; }
+    .phys-stats { font-family: var(--font-mono); font-size: 11px; color: #64748b; margin-left: auto; }
+
+    /* ── 프리드라이브 ── */
+    .freedrive-active {
+      border-color: #f59e0b !important; color: #fbbf24 !important;
+      background: rgba(245,158,11,0.15) !important;
+      box-shadow: 0 0 8px rgba(245,158,11,0.3);
+    }
+
+    /* ── 드래그 HUD ── */
+    #drag-hud {
+      display: none; position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      background: rgba(10,15,24,0.88); border: 1.5px solid #f59e0b; border-radius: 8px;
+      padding: 5px 16px; font-family: var(--font-mono); font-size: 13px; color: #fbbf24;
+      pointer-events: none; z-index: 5; white-space: nowrap;
+      box-shadow: 0 2px 12px rgba(245,158,11,0.25);
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📊 Piper 로봇 시스템 텔레메트리 (대시보드)</h1>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <a href="/calibration" target="_blank"
+         style="padding:6px 13px; border-radius:8px; font-size:13px; font-weight:700;
+                text-decoration:none; border:1.5px solid #f59e0b; color:#fbbf24;
+                background:rgba(245,158,11,0.1); transition:all .15s;"
+         onmouseover="this.style.background='#f59e0b';this.style.color='#fff'"
+         onmouseout="this.style.background='rgba(245,158,11,0.1)';this.style.color='#fbbf24'">
+        🎯 캘리브레이션
+      </a>
+      <a href="/" target="_blank"
+         style="padding:6px 13px; border-radius:8px; font-size:13px; font-weight:700;
+                text-decoration:none; border:1.5px solid var(--border); color:#94a3b8;
+                background:transparent; transition:all .15s;"
+         onmouseover="this.style.background='#1a2233';this.style.color='#e2e8f0'"
+         onmouseout="this.style.background='transparent';this.style.color='#94a3b8'">
+        ← IDE
+      </a>
+      <div class="status-badge">
+        <div class="dot error" id="statusDot"></div>
+        <span id="statusText">연결 대기 중...</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="main-area">
+    <!-- 왼쪽: 데이터 패널 -->
+    <div class="left-panels">
+      <div class="card">
+        <h2>🦾 관절 각도 (Joint State)</h2>
+        <div id="joints-container"></div>
+      </div>
+      <div class="card">
+        <h2>📍 작업 공간 좌표 (End Pose)</h2>
+        <div id="pose-container"></div>
+        <h2 style="margin-top:16px; border-bottom:none; padding-bottom:0">✋ 그리퍼 (Gripper)</h2>
+        <div class="data-row" style="border-color: var(--accent); margin-top:8px;">
+          <span>실시간 개폐 상태</span> <span class="val" id="gripperVal">0.0 mm</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 오른쪽: 3D 로봇 시뮬레이터 -->
+    <div class="viewer-card">
+      <div class="viewer-header">
+        🤖 3D 로봇 시뮬레이터 (Piper 실제 모델)
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button id="freedrive-btn" class="phys-btn" onclick="toggleFreedrive()"
+                  title="마우스로 조인트 직접 조작 (시뮬레이션 모드)">
+            🕹 프리드라이브
+          </button>
+          <span class="viewer-hint" id="viewer-hint">드래그: 회전 | 휠: 줌 | 우클릭: 이동</span>
+        </div>
+      </div>
+      <!-- 물리 엔진 컨트롤 바 -->
+      <div class="physics-bar">
+        <label title="cannon.js 물리 시뮬레이션 (중력·충돌 감지)">
+          <input type="checkbox" id="phys-toggle" onchange="togglePhysics(this.checked)">
+          ⚡ 물리 엔진
+        </label>
+        <div class="phys-sep"></div>
+        <span style="font-size:11px;color:#64748b;">물체 투하:</span>
+        <button class="phys-btn" id="btn-sphere"   onclick="spawnObject('sphere')"   disabled>⚪ 구체</button>
+        <button class="phys-btn" id="btn-box"      onclick="spawnObject('box')"      disabled>🟫 상자</button>
+        <button class="phys-btn" id="btn-cylinder" onclick="spawnObject('cylinder')" disabled>🔵 원통</button>
+        <div class="phys-sep"></div>
+        <button class="phys-btn red-btn" id="btn-clear" onclick="clearObjects()" disabled>🗑 초기화</button>
+        <div class="phys-stats" id="phys-stats">물리 엔진 비활성</div>
+      </div>
+      <div class="canvas-wrap" id="canvas-wrap">
+        <!-- 로딩 오버레이 -->
+        <div id="loading-overlay">
+          <div class="loading-spinner"></div>
+          <div id="loading-text">Piper 3D 모델 로딩 중...</div>
+          <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
+          <div id="loading-count">0 / 10</div>
+        </div>
+        <div id="drag-hud"></div>
+        <canvas id="robot-canvas"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- 로그 -->
+  <div class="card log-section">
+    <h2>⚠️ 오류 감지 및 시스템 접속 로그</h2>
+    <div class="logs" id="logs"></div>
+  </div>
+
+  <script>
+    // ───────────────────────────────────────────
+    // 소켓 & 대시보드 업데이트
+    // ───────────────────────────────────────────
+    const socket = io();
+    const _logsEl = document.getElementById('logs');  // addLog에서 사용
+
+    function addLog(msg, type='log-info') {
+      const div = document.createElement('div');
+      div.className = type;
+      div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      _logsEl.appendChild(div);
+      if (_logsEl.children.length > 120) _logsEl.removeChild(_logsEl.firstChild);
+      _logsEl.scrollTop = _logsEl.scrollHeight;
+    }
+
+    const jLabels = ['J1 (Base)', 'J2 (Shoulder)', 'J3 (Elbow)', 'J4 (Wrist 1)', 'J5 (Wrist 2)', 'J6 (Roll)'];
+    const pLabels = ['X 좌표 (mm)', 'Y 좌표 (mm)', 'Z 좌표 (mm)', 'RX (Roll °)', 'RY (Pitch °)', 'RZ (Yaw °)'];
+
+    function renderRows(containerId, labels) {
+      const c = document.getElementById(containerId);
+      c.innerHTML = labels.map((l, i) => `
+        <div class="data-row">
+          <span>${l}</span>
+          <span class="val" id="${containerId}-val-${i}">0.0</span>
+        </div>`).join('');
+    }
+    renderRows('joints-container', jLabels);
+    renderRows('pose-container', pLabels);
+
+    // DOM 캐시 (renderRows 이후 — 소켓 이벤트마다 getElementById 재호출 방지)
+    const _dot        = document.getElementById('statusDot');
+    const _statusTxt  = document.getElementById('statusText');
+    const _gripperEl  = document.getElementById('gripperVal');
+    const _dragHud    = document.getElementById('drag-hud');
+    const _physStatsEl = document.getElementById('phys-stats');
+    const _jEls = Array.from({length:6}, (_, i) => document.getElementById(`joints-container-val-${i}`));
+    const _pEls = Array.from({length:6}, (_, i) => document.getElementById(`pose-container-val-${i}`));
+
+    let wasConnected = false;
+    let latestJoints  = [0, 0, 0, 0, 0, 0];
+    let latestGripper = 0;
+
+    socket.on('dashboard_update', (data) => {
+      if (data.status === 'Connected' || data.status === 'Simulation') {
+        if (data.status === 'Connected') {
+          _dot.className = 'dot connected';
+          _statusTxt.textContent = 'CAN 버스 수신 중 (정상)';
+          if (!wasConnected) { addLog('CAN 시스템 정상 연결 확인됨. 텔레메트리 수신 시작'); wasConnected = true; }
+        } else {
+          _dot.className = 'dot simulation';
+          _statusTxt.textContent = '로봇 시뮬레이션 중 (가상)';
+          if (!wasConnected) { addLog('시뮬레이션 모드가 감지되었습니다. 가상 텔레메트리 수신 중'); wasConnected = true; }
+        }
+        // 드래그 중이 아닌 관절만 패널 업데이트 (드래그 중인 관절은 pointermove에서 직접 갱신)
+        data.joints.forEach((v, i) => {
+          if (i !== draggingJoint) _jEls[i].textContent = v.toFixed(2) + ' °';
+        });
+        data.pose.forEach((v, i) => { _pEls[i].textContent = v.toFixed(1); });
+        _gripperEl.textContent = data.gripper.toFixed(1) + ' mm';
+        if (draggingJoint < 0) latestJoints = data.joints.slice();  // 복사본 유지
+        latestGripper = data.gripper;
+      } else {
+        _dot.className = 'dot error';
+        _statusTxt.textContent = '신호 불안정 / 연결 오류';
+        if (wasConnected) { addLog(`연결 유실됨: ${data.message}`, 'log-error'); wasConnected = false; }
+      }
+    });
+
+    socket.on('connect',    () => addLog('웹소켓 서버에 접속했습니다.'));
+    socket.on('disconnect', () => addLog('웹소켓 서버와의 연결이 끊겼습니다.', 'log-error'));
+
+
+    // ───────────────────────────────────────────
+    // Three.js 씬 초기화
+    // ───────────────────────────────────────────
+    const wrap   = document.getElementById('canvas-wrap');
+    const canvas = document.getElementById('robot-canvas');
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x0d1117);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x0d1117, 6, 20);
+
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 50);
+    camera.position.set(1.4, 1.0, 1.4);
+    camera.lookAt(0, 0.35, 0);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 0.35, 0);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 0.3;
+    controls.maxDistance = 8;
+    controls.update();
+
+    // 조명
+    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+    dirLight.position.set(2, 4, 2);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.setScalar(1024);
+    scene.add(dirLight);
+    const fillLight = new THREE.DirectionalLight(0x6699ff, 0.28);
+    fillLight.position.set(-2, 2, -2);
+    scene.add(fillLight);
+
+    // 바닥 그리드
+    const gridHelper = new THREE.GridHelper(2, 20, 0x2a3550, 0x1e2a3a);
+    scene.add(gridHelper);
+
+    // 원점 좌표축
+    scene.add(new THREE.AxesHelper(0.12));
+
+    // ───────────────────────────────────────────
+    // URDF 관절 정의 (piper_description.urdf 기준)
+    // 모든 단위: 미터 (URDF 표준)
+    // ───────────────────────────────────────────
+    const PI = Math.PI;
+
+    // [name, parent_link, child_link, xyz, rpy(XYZ고정축), type]
+    const JOINT_DEFS = [
+      { name:'j1',  parent:'base_link',    child:'link1',        xyz:[0,         0,       0.123  ], rpy:[0,             0,      0    ], type:'revolute'  },
+      { name:'j2',  parent:'link1',        child:'link2',        xyz:[0,         0,       0      ], rpy:[PI/2,         -0.10095,-PI   ], type:'revolute'  },
+      { name:'j3',  parent:'link2',        child:'link3',        xyz:[0.28503,   0,       0      ], rpy:[0,             0,      -1.759], type:'revolute'  },
+      { name:'j4',  parent:'link3',        child:'link4',        xyz:[-0.021984,-0.25075, 0      ], rpy:[PI/2,          0,       0    ], type:'revolute'  },
+      { name:'j5',  parent:'link4',        child:'link5',        xyz:[0,         0,       0      ], rpy:[-PI/2,         0,       0    ], type:'revolute'  },
+      { name:'j6',  parent:'link5',        child:'link6',        xyz:[8.8259e-5,-0.091,   0      ], rpy:[PI/2,          0,       0    ], type:'revolute'  },
+      { name:'jgb', parent:'link6',        child:'gripper_base', xyz:[0,         0,       0      ], rpy:[0,             0,       0    ], type:'fixed'     },
+      { name:'j7',  parent:'gripper_base', child:'link7',        xyz:[0,         0,       0.1358 ], rpy:[PI/2,          0,       0    ], type:'prismatic' },
+      { name:'j8',  parent:'gripper_base', child:'link8',        xyz:[0,         0,       0.1358 ], rpy:[PI/2,          0,      -PI   ], type:'prismatic' },
+    ];
+
+    // ───────────────────────────────────────────
+    // STL 로딩 & 로봇 조립
+    // ───────────────────────────────────────────
+    const MESH_NAMES = ['base_link','link1','link2','link3','link4','link5','link6','gripper_base','link7','link8'];
+    const geos = {};
+    let loadedCount = 0;
+
+    // 로봇 애니메이션용 상태
+    let joint_pivots  = [];      // 6개 회전 관절 Object3D
+    let link7_pivot   = null;    // 그리퍼 손가락 1
+    let link8_pivot   = null;    // 그리퍼 손가락 2
+    let robotReady    = false;
+
+    // 물리 엔진 (cannon.js)
+    let physicsWorld   = null;
+    let physicsEnabled = false;
+    let linkFrames     = {};     // link name → Three.js Object3D (buildRobot에서 노출)
+    let robotBodies    = [];     // { body, linkName } — 키네마틱 로봇 바디
+    let dynObjects     = [];     // { body, mesh }     — 동적 투하 물체
+    let lastPhysTime   = 0;
+
+    // 프리드라이브 (마우스 조인트 직접 조작)
+    let meshToLink      = new Map();  // THREE.Mesh → link name
+    let _raycastMeshes  = [];         // meshToLink.keys() 캐시 (pointermove GC 절감)
+    let draggingJoint   = -1;         // 현재 드래그 중인 관절 인덱스 (-1 = 없음)
+    let dragStartX      = 0;
+    let dragStartY      = 0;
+    let dragStartAngle  = 0;
+    let hoveredLink     = null;
+    let lastJogSend     = 0;
+    let _lastHoverTime  = 0;          // hover raycasting throttle 타임스탬프
+    // 드래그 축 계산용 재사용 임시 객체 (매 이벤트 GC 절감)
+    const _dquat = new THREE.Quaternion();
+    const _dvec  = new THREE.Vector3();
+    const raycaster     = new THREE.Raycaster();
+    const mouse2d       = new THREE.Vector2();
+
+    // 부드러운 보간용: 렌더 루프에서 latestJoints로 매 프레임 선형 보간
+    let smoothJoints  = [0, 0, 0, 0, 0, 0];
+    let smoothGripper = 0;
+    const LERP = 0.25;  // 보간 계수 (높을수록 빠름, 낮을수록 부드러움)
+
+    function onMeshProgress() {
+      loadedCount++;
+      const pct = loadedCount / MESH_NAMES.length * 100;
+      document.getElementById('loading-bar').style.width = pct + '%';
+      document.getElementById('loading-count').textContent = `${loadedCount} / ${MESH_NAMES.length}`;
+    }
+
+    function loadAllSTL() {
+      const loader = new THREE.STLLoader();
+      return Promise.all(MESH_NAMES.map(name => new Promise(resolve => {
+        loader.load(
+          `/meshes/${name}.STL`,
+          geo => {
+            geo.computeVertexNormals();
+            geos[name] = geo;
+            onMeshProgress();
+            resolve();
+          },
+          undefined,          // progress callback 불필요 (파일 단위 카운트)
+          () => { onMeshProgress(); resolve(); }  // 오류 시에도 계속 진행
+        );
+      })));
+    }
+
+    function buildRobot() {
+      // 공통 재질 (URDF 색상 #cad0ee 계열)
+      const baseMat = new THREE.MeshStandardMaterial({
+        color: 0xccd3ee, metalness: 0.50, roughness: 0.38
+      });
+
+      // 로봇 루트: ROS z-up → Three.js y-up 변환 (-90° around X)
+      const robotRoot = new THREE.Object3D();
+      robotRoot.rotation.x = -PI / 2;
+      scene.add(robotRoot);
+
+      // 링크 프레임 맵 (link name → Object3D)
+      const frames = { 'base_link': robotRoot };
+
+      // base_link 메쉬
+      if (geos['base_link']) {
+        const m = new THREE.Mesh(geos['base_link'], baseMat.clone());
+        m.castShadow = true; m.receiveShadow = true;
+        robotRoot.add(m);
+        meshToLink.set(m, 'base_link');
+      }
+
+      // 관절 체인 조립
+      for (const jd of JOINT_DEFS) {
+        const parentFrame = frames[jd.parent];
+        if (!parentFrame) continue;
+
+        // 관절 원점 오프셋 (URDF origin: xyz + rpy)
+        // URDF rpy = extrinsic XYZ (고정축) = Three.js intrinsic ZYX 순서
+        // → Three.js Euler('ZYX'): M = Rz(yaw)·Ry(pitch)·Rx(roll)
+        const jointOffset = new THREE.Object3D();
+        jointOffset.position.set(jd.xyz[0], jd.xyz[1], jd.xyz[2]);
+        jointOffset.rotation.set(jd.rpy[0], jd.rpy[1], jd.rpy[2], 'ZYX');
+        parentFrame.add(jointOffset);
+
+        // 관절 피벗 (회전/이동이 적용되는 자식 프레임)
+        const pivot = new THREE.Object3D();
+        jointOffset.add(pivot);
+        jd.pivot = pivot;
+
+        // 자식 링크 프레임 등록
+        frames[jd.child] = pivot;
+
+        // 자식 링크 메쉬
+        if (geos[jd.child]) {
+          const m = new THREE.Mesh(geos[jd.child], baseMat.clone());
+          m.castShadow = true; m.receiveShadow = true;
+          pivot.add(m);
+          meshToLink.set(m, jd.child);
+        }
+      }
+
+      // 회전 관절 피벗 배열 (J1~J6)
+      joint_pivots = [
+        JOINT_DEFS[0].pivot, JOINT_DEFS[1].pivot, JOINT_DEFS[2].pivot,
+        JOINT_DEFS[3].pivot, JOINT_DEFS[4].pivot, JOINT_DEFS[5].pivot,
+      ];
+      // 그리퍼 손가락 피벗
+      link7_pivot = JOINT_DEFS[7].pivot;
+      link8_pivot = JOINT_DEFS[8].pivot;
+
+      // 엔드 이펙터 좌표축 (gripper_base 프레임에 부착)
+      const eeAxes = new THREE.AxesHelper(0.055);
+      frames['gripper_base'].add(eeAxes);
+
+      robotReady = true;
+
+      // 물리 엔진에서 사용할 링크 프레임 맵 노출
+      linkFrames = Object.assign({}, frames);
+      // 레이캐스팅용 메쉬 배열 캐시 (매 이벤트마다 spread 방지)
+      _raycastMeshes = [...meshToLink.keys()];
+    }
+
+    // ───────────────────────────────────────────
+    // 로봇 포즈 업데이트 (매 프레임)
+    // ───────────────────────────────────────────
+    function updateRobot(joints_deg, gripper_mm) {
+      if (!robotReady) return;
+
+      // J1~J6: 관절 각도(도) → 라디안, local z축 회전
+      for (let i = 0; i < 6; i++) {
+        joint_pivots[i].rotation.z = joints_deg[i] * PI / 180;
+      }
+
+      // 그리퍼: 총 개폐량(mm)의 절반씩 각 손가락이 이동 (max 35mm/finger)
+      const half_m = Math.min(gripper_mm * 0.0005, 0.035);
+      link7_pivot.position.z = half_m;
+      link8_pivot.position.z = half_m;
+      // link7·link8의 jointOffset rpy가 서로 반대 방향이므로
+      // 둘 다 +z로 이동해도 실제로는 서로 반대 방향(그리퍼 열림)으로 움직임
+    }
+
+    // ───────────────────────────────────────────
+    // 로딩 실행 → 로봇 조립 → 오버레이 해제
+    // ───────────────────────────────────────────
+    loadAllSTL().then(() => {
+      buildRobot();
+      initPhysics();
+      document.getElementById('loading-overlay').style.display = 'none';
+      addLog('Piper 3D 모델 로드 완료 (STL 메쉬 ' + MESH_NAMES.length + '개)');
+    }).catch(err => {
+      addLog('3D 모델 로드 오류: ' + err, 'log-error');
+      document.getElementById('loading-overlay').style.display = 'none';
+    });
+
+    // ───────────────────────────────────────────
+    // 리사이즈 & 렌더 루프
+    // ───────────────────────────────────────────
+    function onResize() {
+      const w = wrap.clientWidth, h = wrap.clientHeight;
+      if (w === 0 || h === 0) return;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    }
+    new ResizeObserver(onResize).observe(wrap);
+    onResize();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+
+      // latestJoints / latestGripper 를 향해 매 프레임 선형 보간
+      // 드래그 중인 관절은 LERP=1 (즉시 반응), 나머지는 부드러운 보간
+      for (let i = 0; i < 6; i++) {
+        const lf = (i === draggingJoint) ? 1.0 : LERP;
+        smoothJoints[i] += (latestJoints[i] - smoothJoints[i]) * lf;
+      }
+      smoothGripper += (latestGripper - smoothGripper) * LERP;
+      updateRobot(smoothJoints, smoothGripper);
+
+      // 물리 엔진 스텝
+      if (physicsEnabled && physicsWorld) {
+        const now = performance.now();
+        const dt  = Math.min((now - lastPhysTime) / 1000, 0.05);
+        lastPhysTime = now;
+
+        syncRobotBodies();
+        physicsWorld.step(1 / 60, dt, 3);
+
+        // 동적 물체 → Three.js 메쉬 동기화 + 범위 밖 자동 제거
+        for (let i = dynObjects.length - 1; i >= 0; i--) {
+          const { body, mesh } = dynObjects[i];
+          if (body.position.y < -1.5) {
+            scene.remove(mesh);
+            physicsWorld.remove(body);
+            dynObjects.splice(i, 1);
+            continue;
+          }
+          mesh.position.copy(body.position);
+          mesh.quaternion.copy(body.quaternion);
+        }
+        updatePhysStats();
+      }
+
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // ───────────────────────────────────────────
+    // 물리 엔진 (cannon.js)
+    // ───────────────────────────────────────────
+
+    // 월드 좌표 조회용 재사용 객체 (GC 절감)
+    const _wpPos  = new THREE.Vector3();
+    const _wpQuat = new THREE.Quaternion();
+
+    function initPhysics() {
+      if (typeof CANNON === 'undefined') {
+        addLog('cannon.js 로드 실패 — 물리 엔진 비활성', 'log-error');
+        return;
+      }
+
+      physicsWorld = new CANNON.World();
+      physicsWorld.gravity.set(0, -9.82, 0);
+      physicsWorld.broadphase = new CANNON.NaiveBroadphase();
+      physicsWorld.solver.iterations = 10;
+
+      // 바닥 평면 (정적, y=0)
+      const ground = new CANNON.Body({ mass: 0 });
+      ground.addShape(new CANNON.Plane());
+      ground.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+      physicsWorld.addBody(ground);
+
+      // 링크별 근사 충돌 형상 (Box 근사)
+      // Three.js world space 기준 — robotRoot의 -90° X 회전 이미 포함됨
+      const linkShapes = {
+        'base_link':    new CANNON.Box(new CANNON.Vec3(0.09, 0.07, 0.09)),
+        'link1':        new CANNON.Box(new CANNON.Vec3(0.06, 0.07, 0.06)),
+        'link2':        new CANNON.Box(new CANNON.Vec3(0.06, 0.07, 0.15)),
+        'link3':        new CANNON.Box(new CANNON.Vec3(0.05, 0.06, 0.06)),
+        'link4':        new CANNON.Box(new CANNON.Vec3(0.04, 0.13, 0.04)),
+        'link5':        new CANNON.Box(new CANNON.Vec3(0.05, 0.05, 0.05)),
+        'link6':        new CANNON.Box(new CANNON.Vec3(0.04, 0.05, 0.04)),
+        'gripper_base': new CANNON.Box(new CANNON.Vec3(0.04, 0.08, 0.04)),
+        'link7':        new CANNON.Box(new CANNON.Vec3(0.012, 0.05, 0.015)),
+        'link8':        new CANNON.Box(new CANNON.Vec3(0.012, 0.05, 0.015)),
+      };
+
+      robotBodies = [];
+      for (const [linkName, shape] of Object.entries(linkShapes)) {
+        if (!linkFrames[linkName]) continue;
+        const body = new CANNON.Body({ mass: 0 });
+        body._robotLink = linkName;
+        body.addShape(shape);
+        physicsWorld.addBody(body);
+        robotBodies.push({ body, linkName });
+      }
+
+      lastPhysTime = performance.now();
+      addLog('물리 엔진 초기화 완료 (cannon.js ' + robotBodies.length + '개 링크 바디)');
+    }
+
+    function syncRobotBodies() {
+      for (const { body, linkName } of robotBodies) {
+        const frame = linkFrames[linkName];
+        if (!frame) continue;
+        frame.getWorldPosition(_wpPos);
+        frame.getWorldQuaternion(_wpQuat);
+        body.position.set(_wpPos.x, _wpPos.y, _wpPos.z);
+        body.quaternion.set(_wpQuat.x, _wpQuat.y, _wpQuat.z, _wpQuat.w);
+      }
+    }
+
+    function spawnObject(type) {
+      if (!physicsEnabled || !physicsWorld) return;
+
+      const x = (Math.random() - 0.5) * 0.25;
+      const z = (Math.random() - 0.5) * 0.25;
+      const y = 0.85 + Math.random() * 0.35;
+
+      let shape, geo, color;
+      if (type === 'sphere') {
+        const r = 0.025 + Math.random() * 0.02;
+        shape = new CANNON.Sphere(r);
+        geo   = new THREE.SphereGeometry(r, 16, 12);
+        color = 0x3b82f6;
+      } else if (type === 'box') {
+        const h = 0.025 + Math.random() * 0.018;
+        shape = new CANNON.Box(new CANNON.Vec3(h, h, h));
+        geo   = new THREE.BoxGeometry(h * 2, h * 2, h * 2);
+        color = 0x22c55e;
+      } else {
+        const r = 0.018, hl = 0.04;
+        shape = new CANNON.Cylinder(r, r, hl * 2, 8);
+        geo   = new THREE.CylinderGeometry(r, r, hl * 2, 12);
+        color = 0xf59e0b;
+      }
+
+      const body = new CANNON.Body({ mass: 0.3, linearDamping: 0.01, angularDamping: 0.12 });
+      body.addShape(shape);
+      body.position.set(x, y, z);
+      body.velocity.set((Math.random() - 0.5) * 0.3, 0, (Math.random() - 0.5) * 0.3);
+      physicsWorld.addBody(body);
+
+      const mat  = new THREE.MeshStandardMaterial({ color, metalness: 0.15, roughness: 0.55 });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.castShadow = true;
+      scene.add(mesh);
+
+      // 충돌 감지 → 로봇 링크 시각적 피드백
+      body.addEventListener('collide', (e) => {
+        if (e.body && e.body._robotLink) {
+          flashLink(e.body._robotLink);
+          const cp = e.contact;
+          if (cp) {
+            // 충돌 지점 계산 (ri/rj: 각 바디 중심 기준 오프셋)
+            const isA = (cp.bi === body);
+            const ri  = isA ? cp.ri : cp.rj;
+            showImpact(new THREE.Vector3(
+              body.position.x + ri.x,
+              body.position.y + ri.y,
+              body.position.z + ri.z
+            ));
+          }
+        }
+      });
+
+      dynObjects.push({ body, mesh });
+    }
+
+    function clearObjects() {
+      for (const { body, mesh } of dynObjects) {
+        scene.remove(mesh);
+        if (physicsWorld) physicsWorld.remove(body);
+      }
+      dynObjects.length = 0;
+      updatePhysStats();
+    }
+
+    function togglePhysics(enabled) {
+      physicsEnabled = enabled;
+      const disabled = !enabled;
+      ['btn-sphere', 'btn-box', 'btn-cylinder', 'btn-clear'].forEach(id => {
+        document.getElementById(id).disabled = disabled;
+      });
+      if (enabled) {
+        lastPhysTime = performance.now();
+        addLog('물리 엔진 활성화 — 물체를 투하해 충돌 시뮬레이션 가능');
+        updatePhysStats();
+      } else {
+        clearObjects();
+        addLog('물리 엔진 비활성화');
+        document.getElementById('phys-stats').textContent = '물리 엔진 비활성';
+      }
+    }
+
+    // 충돌 로그 cooldown (링크별 600ms — 연속 충돌 스팸 방지)
+    const _flashCooldown = new Map();
+
+    function flashLink(linkName) {
+      const now = Date.now();
+      if ((now - (_flashCooldown.get(linkName) ?? 0)) < 600) return;
+      _flashCooldown.set(linkName, now);
+      const frame = linkFrames[linkName];
+      if (!frame) return;
+      frame.traverse(child => {
+        if (child.isMesh && child.material) {
+          child.material.emissive.setHex(0xff2222);  // new THREE.Color() 불필요
+          child.material.emissiveIntensity = 0.9;
+          setTimeout(() => { child.material.emissiveIntensity = 0; }, 350);
+        }
+      });
+      addLog(`충돌 감지 — 링크: ${linkName}`, 'log-error');
+    }
+
+    const _impactGeo = new THREE.SphereGeometry(0.012, 8, 6);  // 재사용 geometry
+    function showImpact(pos) {
+      const mesh = new THREE.Mesh(
+        _impactGeo,
+        new THREE.MeshBasicMaterial({ color: 0xff4444 })
+      );
+      mesh.position.copy(pos);
+      scene.add(mesh);
+      setTimeout(() => { scene.remove(mesh); mesh.material.dispose(); }, 420);
+    }
+
+    function updatePhysStats() {
+      if (!physicsEnabled || !physicsWorld) {
+        _physStatsEl.textContent = '물리 엔진 비활성';
+        return;
+      }
+      _physStatsEl.textContent = `물체: ${dynObjects.length}  |  바디: ${physicsWorld.bodies.length}`;
+    }
+
+    // ───────────────────────────────────────────
+    // 프리드라이브: 마우스로 조인트 직접 조작
+    // ───────────────────────────────────────────
+
+    // DH 파라미터 (server.py _fk() 와 동일)
+    const _DH_A     = [0, 0, 0.28503, -0.02198, 0, 0];
+    const _DH_ALPHA = [0, -PI/2, 0, PI/2, -PI/2, PI/2];
+    const _DH_D     = [0.123, 0, 0, 0.25075, 0, 0.091];
+    const _DH_TOFF  = [0, -174.22*PI/180, -100.78*PI/180, 0, 0, 0];
+
+    function computeFK(joints_deg) {
+      let T = [[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]];
+      for (let i = 0; i < 6; i++) {
+        const th = joints_deg[i] * PI / 180 + _DH_TOFF[i];
+        const a = _DH_A[i], alpha = _DH_ALPHA[i], d = _DH_D[i];
+        const ct = Math.cos(th), st = Math.sin(th);
+        const ca = Math.cos(alpha), sa = Math.sin(alpha);
+        const Ti = [
+          [ct,  -st*ca,  st*sa,  a*ct],
+          [st,   ct*ca, -ct*sa,  a*st],
+          [0,    sa,     ca,     d   ],
+          [0,    0,      0,      1   ],
+        ];
+        const N = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];
+        for (let r = 0; r < 4; r++)
+          for (let c = 0; c < 4; c++)
+            for (let k = 0; k < 4; k++) N[r][c] += T[r][k] * Ti[k][c];
+        T = N;
+      }
+      const x = T[0][3]*1000, y = T[1][3]*1000, z = T[2][3]*1000;
+      const sy = Math.sqrt(T[0][0]**2 + T[1][0]**2);
+      let rx, ry, rz;
+      if (sy > 1e-6) {
+        rx = Math.atan2(T[2][1], T[2][2]);
+        ry = Math.atan2(-T[2][0], sy);
+        rz = Math.atan2(T[1][0], T[0][0]);
+      } else {
+        rx = Math.atan2(-T[1][2], T[1][1]);
+        ry = Math.atan2(-T[2][0], sy);
+        rz = 0;
+      }
+      const r2d = v => Math.round(v * 18000 / PI) / 100;
+      return [
+        Math.round(x*100)/100, Math.round(y*100)/100, Math.round(z*100)/100,
+        r2d(rx), r2d(ry), r2d(rz),
+      ];
+    }
+
+    // link name → 관절 인덱스 (J1~J6)
+    const LINK_JOINT_IDX = { link1:0, link2:1, link3:2, link4:3, link5:4, link6:5 };
+    const JOINT_LIMITS   = [-175, 175];
+    const DRAG_SENS      = 0.5;  // °/px
+    // DRAG_DIR 제거 — 드래그 방향은 관절 축을 카메라 공간으로 투영해 동적으로 계산
+
+    let freedriveMode = false;
+
+    function toggleFreedrive() {
+      freedriveMode = !freedriveMode;
+      const btn  = document.getElementById('freedrive-btn');
+      const hint = document.getElementById('viewer-hint');
+      if (freedriveMode) {
+        btn.classList.add('freedrive-active');
+        hint.textContent = '링크 드래그: 관절 조작 | 스크롤: 줌 | 우클릭: 이동';
+        controls.enableRotate = false;
+        addLog('🕹 프리드라이브 활성 — 링크를 좌클릭+드래그해 관절을 조작하세요');
+      } else {
+        btn.classList.remove('freedrive-active');
+        hint.textContent = '드래그: 회전 | 휠: 줌 | 우클릭: 이동';
+        controls.enableRotate = true;
+        if (hoveredLink) { _setHighlight(hoveredLink, 0, 0); hoveredLink = null; }
+        canvas.style.cursor = 'default';
+        addLog('프리드라이브 비활성');
+      }
+    }
+
+    function _setHighlight(linkName, intensity, hexColor) {
+      const frame = linkFrames[linkName];
+      if (!frame) return;
+      frame.traverse(child => {
+        if (child.isMesh && child.material) {
+          if (intensity > 0) child.material.emissive.setHex(hexColor);  // in-place 색상 변경
+          child.material.emissiveIntensity = intensity;
+        }
+      });
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // 포인터 이벤트 기반 프리드라이브 핸들러
+    //  - pointerdown  : 링크 감지 → pointer capture 설정
+    //  - pointermove  : drag(capture 덕에 canvas 밖에서도 연속) + hover
+    //  - pointerup    : drag 종료, capture 해제
+    //  - pointerleave : hover 클리어
+    // ─────────────────────────────────────────────────────────
+
+    let _capturePid = null;   // 현재 캡처된 pointerId
+
+    function _getHit(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return null;
+      mouse2d.x =  (clientX - rect.left) / rect.width  * 2 - 1;
+      mouse2d.y = -(clientY - rect.top)  / rect.height * 2 + 1;
+      raycaster.setFromCamera(mouse2d, camera);
+      const hits = raycaster.intersectObjects(_raycastMeshes, false);  // 캐시 배열 사용
+      return hits.length > 0 ? hits[0] : null;
+    }
+
+    canvas.addEventListener('pointerdown', (e) => {
+      if (!freedriveMode || !robotReady || e.button !== 0) return;
+      const hit = _getHit(e.clientX, e.clientY);
+      if (!hit) return;
+
+      // hit.object 자체 또는 조상 중 meshToLink에 등록된 것 찾기
+      let lname = meshToLink.get(hit.object);
+      if (lname === undefined) {
+        let obj = hit.object.parent;
+        while (obj) {
+          if (meshToLink.has(obj)) { lname = meshToLink.get(obj); break; }
+          obj = obj.parent;
+        }
+      }
+      const jIdx = lname !== undefined ? LINK_JOINT_IDX[lname] : undefined;
+      if (jIdx === undefined) return;
+
+      draggingJoint  = jIdx;
+      dragStartX     = e.clientX;
+      dragStartY     = e.clientY;
+      dragStartAngle = latestJoints[jIdx];
+      _capturePid    = e.pointerId;
+      controls.enabled = false;
+      canvas.setPointerCapture(e.pointerId);
+      _setHighlight(lname, 0.75, 0xff6600);
+      canvas.style.cursor = 'grabbing';
+      // HUD 표시: 어떤 관절을 드래그 중인지 표시
+      _dragHud.textContent = `J${jIdx + 1}  ${latestJoints[jIdx].toFixed(1)}°`;
+      _dragHud.style.display = 'block';
+      e.preventDefault();
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (draggingJoint >= 0) {
+        // ── drag: 관절 축을 카메라 공간에 투영해 자연스러운 드래그 방향 계산 ──
+        // 1) 관절 피벗의 로컬 Z축(회전 축)을 월드 공간으로 변환
+        const pivot = joint_pivots[draggingJoint];
+        pivot.getWorldQuaternion(_dquat);
+        _dvec.set(0, 0, 1).applyQuaternion(_dquat);
+        // 2) 카메라 뷰 공간으로 변환 (카메라 X=오른쪽, Y=위)
+        _dvec.transformDirection(camera.matrixWorldInverse);
+        const ax = _dvec.x, ay = _dvec.y;
+        // 3) 화면상 투영된 축의 수직 방향으로 마우스 델타를 내적
+        //    perp(ax, ay) = (-ay, ax) [CCW 90° 회전]
+        //    화면 Y는 아래가 +이므로 카메라 Y와 반대 → mdy 부호 반전
+        const mdx = e.clientX - dragStartX;
+        const mdy = -(e.clientY - dragStartY);  // 스크린 아래 = 카메라 -Y
+        const perpLen = Math.sqrt(ax*ax + ay*ay);
+        // 축이 카메라 방향과 거의 평행(화면에 점으로 보임)이면 수평 델타 사용
+        const effectiveDrag = perpLen > 0.1
+          ? (mdx * (-ay) + mdy * ax) / perpLen
+          : mdx;
+        let ang = dragStartAngle + effectiveDrag * DRAG_SENS;
+        ang = Math.max(JOINT_LIMITS[0], Math.min(JOINT_LIMITS[1], ang));
+        latestJoints[draggingJoint] = ang;
+        // 패널 직접 갱신 (소켓 대기 없이 즉시 반영)
+        _jEls[draggingJoint].textContent = ang.toFixed(2) + ' °';
+        // HUD 업데이트
+        _dragHud.textContent = `J${draggingJoint + 1}  ${ang.toFixed(1)}°`;
+        // 50ms throttle 서버 전송
+        const now = Date.now();
+        if (now - lastJogSend > 50) {
+          lastJogSend = now;
+          fetch('/update_virtual', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ joints: latestJoints.slice(), pose: computeFK(latestJoints) })
+          }).catch(() => {});
+        }
+        return;
+      }
+
+      // ── hover: 32ms throttle (raycasting 과부하 방지) ──
+      if (!freedriveMode || !robotReady) return;
+      const now = Date.now();
+      if (now - _lastHoverTime < 32) return;
+      _lastHoverTime = now;
+
+      const hit   = _getHit(e.clientX, e.clientY);
+      const lname = hit ? (meshToLink.get(hit.object) ?? null) : null;
+      const jIdx  = lname !== null ? LINK_JOINT_IDX[lname] : undefined;
+
+      if (jIdx !== undefined) {
+        if (hoveredLink !== lname) {
+          if (hoveredLink) _setHighlight(hoveredLink, 0, 0);
+          hoveredLink = lname;
+          _setHighlight(lname, 0.35, 0xf59e0b);
+          canvas.style.cursor = 'grab';
+        }
+      } else if (hoveredLink) {
+        _setHighlight(hoveredLink, 0, 0);
+        hoveredLink = null;
+        canvas.style.cursor = 'default';
+      }
+    });
+
+    window.addEventListener('pointerup', (e) => {
+      if (draggingJoint < 0) return;
+      if (_capturePid !== null) {
+        try { canvas.releasePointerCapture(_capturePid); } catch (_) {}
+        _capturePid = null;
+      }
+      fetch('/update_virtual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ joints: latestJoints.slice(), pose: computeFK(latestJoints) })
+      }).catch(() => {});
+      const lname = Object.keys(LINK_JOINT_IDX).find(k => LINK_JOINT_IDX[k] === draggingJoint);
+      if (lname) _setHighlight(lname, hoveredLink === lname ? 0.35 : 0, hoveredLink === lname ? 0xf59e0b : 0);
+      _dragHud.style.display = 'none';  // HUD 숨김
+      draggingJoint    = -1;
+      controls.enabled = true;
+      canvas.style.cursor = 'default';
+    });
+
+    canvas.addEventListener('pointerleave', () => {
+      if (hoveredLink && draggingJoint < 0) {
+        _setHighlight(hoveredLink, 0, 0);
+        hoveredLink = null;
+        canvas.style.cursor = 'default';
+      }
+    });
+  </script>
+</body>
+</html>

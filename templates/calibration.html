@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>원점 캘리브레이션 — Piper</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:     #0b0f16;
+      --card:   #141a24;
+      --card2:  #1a2233;
+      --border: #2a3550;
+      --text:   #e2e8f0;
+      --dim:    #94a3b8;
+      --muted:  #64748b;
+      --accent: #3b82f6;
+      --green:  #22c55e;
+      --red:    #ef4444;
+      --amber:  #f59e0b;
+      --mono:   'JetBrains Mono', monospace;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Noto Sans KR', sans-serif;
+      font-size: 15px;
+      min-height: 100%;
+    }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+
+    /* ── 상단 바 ── */
+    .top-bar {
+      background: var(--card);
+      border-bottom: 2px solid var(--border);
+      padding: 0 28px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 2px 20px rgba(0,0,0,0.5);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .top-bar-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--amber);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      white-space: nowrap;
+    }
+    .top-bar-badge {
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(245,158,11,0.15);
+      color: var(--amber);
+      border: 1px solid var(--amber);
+      border-radius: 4px;
+      padding: 2px 7px;
+      letter-spacing: 0.4px;
+    }
+    .top-bar .sep { flex: 1; }
+    .nav-link {
+      padding: 7px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: inherit;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all .15s;
+      background: transparent;
+      border: 1.5px solid var(--border);
+      color: var(--dim);
+      white-space: nowrap;
+    }
+    .nav-link:hover {
+      background: var(--card2);
+      color: var(--text);
+      border-color: var(--dim);
+    }
+
+    /* ── 본문 ── */
+    .main {
+      max-width: 800px;
+      margin: 32px auto 60px;
+      padding: 0 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+
+    /* ── 카드 공통 ── */
+    .card {
+      background: var(--card);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 22px 26px;
+    }
+    .card h2 {
+      font-size: 15px;
+      color: var(--accent);
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1.5px solid var(--border);
+    }
+
+    /* ── 설명 ── */
+    .desc-card {
+      background: var(--card);
+      border: 1.5px solid var(--border);
+      border-left: 4px solid var(--amber);
+      border-radius: 14px;
+      padding: 18px 22px;
+    }
+    .desc-card h3 {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--amber);
+      margin-bottom: 8px;
+    }
+    .desc-card p {
+      font-size: 13px;
+      color: var(--dim);
+      line-height: 1.8;
+    }
+    .desc-card code {
+      background: var(--card2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--accent);
+    }
+
+    /* ── 관절 컨트롤 ── */
+    .joint-row {
+      display: grid;
+      grid-template-columns: 44px 1fr 110px 30px;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    .joint-row:last-child { margin-bottom: 0; }
+    .joint-label {
+      font-family: var(--mono);
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--accent);
+    }
+    .joint-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--border);
+      outline: none;
+      cursor: pointer;
+    }
+    .joint-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      border: 2px solid #fff;
+      box-shadow: 0 0 8px rgba(59,130,246,0.5);
+      transition: background .15s, transform .1s;
+    }
+    .joint-slider:active::-webkit-slider-thumb { transform: scale(1.15); }
+    .joint-input {
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      color: var(--text);
+      padding: 7px 10px;
+      border-radius: 8px;
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 700;
+      text-align: right;
+      outline: none;
+      width: 100%;
+      transition: border-color .2s;
+    }
+    .joint-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+    .joint-unit {
+      font-size: 13px;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    /* ── 현재 위치 / 저장 값 비교 행 ── */
+    .range-hint {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--muted);
+      font-family: var(--mono);
+      margin-bottom: 18px;
+      padding: 0 58px;
+    }
+
+    /* ── 버튼 ── */
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    .btn {
+      padding: 14px 12px;
+      border: 1.5px solid transparent;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all .15s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      line-height: 1.3;
+    }
+    .btn:active { transform: scale(.95); }
+    .btn-sub { font-size: 11px; font-weight: 400; opacity: 0.75; }
+    .btn-read  { background: #0c1a2e; border-color: var(--accent); color: #93c5fd; }
+    .btn-read:hover  { background: var(--accent); color: #fff; }
+    .btn-reset { background: #1c1917; border-color: #57534e; color: #a8a29e; }
+    .btn-reset:hover { background: #57534e; color: #fff; }
+    .btn-save  { background: #052e16; border-color: var(--green); color: #4ade80; }
+    .btn-save:hover  { background: var(--green); color: #fff; }
+    .btn-apply { background: #2d1b06; border-color: var(--amber); color: #fbbf24; }
+    .btn-apply:hover { background: var(--amber); color: #fff; }
+
+    /* ── 상태 메시지 ── */
+    #status-msg {
+      padding: 14px 18px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      border: 1.5px solid var(--border);
+      color: var(--dim);
+      background: var(--card);
+      display: none;
+      align-items: center;
+      gap: 10px;
+      transition: all .3s;
+    }
+    #status-msg.show    { display: flex; }
+    #status-msg.success { border-color: var(--green); color: #4ade80; background: #052e16; }
+    #status-msg.error   { border-color: var(--red);   color: #fca5a5; background: #450a0a; }
+    #status-msg.info    { border-color: var(--accent); color: #93c5fd; background: #0c1a2e; }
+    #status-msg.warning { border-color: var(--amber);  color: #fbbf24; background: #2d1b06; }
+
+    /* ── 저장된 값 디스플레이 ── */
+    .saved-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 10px;
+    }
+    .saved-cell {
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 8px;
+      text-align: center;
+      transition: border-color .2s;
+    }
+    .saved-cell:hover { border-color: var(--accent); }
+    .saved-cell .jlabel {
+      font-size: 12px;
+      color: var(--muted);
+      font-family: var(--mono);
+      display: block;
+      margin-bottom: 6px;
+    }
+    .saved-cell .jval {
+      font-family: var(--mono);
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .saved-cell .junit {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .saved-meta {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 12px;
+      padding: 8px 12px;
+      background: var(--bg);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    /* ── 빠른 실행 섹션 ── */
+    .quick-card {
+      background: var(--card);
+      border: 1.5px solid var(--border);
+      border-top: 3px solid var(--green);
+      border-radius: 14px;
+      padding: 20px 26px;
+    }
+    .quick-card h2 { font-size: 15px; color: var(--green); margin-bottom: 12px; }
+    .quick-desc {
+      font-size: 13px; color: var(--dim); margin-bottom: 16px; line-height: 1.7;
+    }
+    .quick-btn-row { display: flex; gap: 10px; }
+    .btn-quick-home {
+      flex: 1;
+      padding: 16px;
+      border: 2px solid var(--green);
+      border-radius: 12px;
+      background: #052e16;
+      color: #4ade80;
+      font-size: 16px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all .15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .btn-quick-home:hover {
+      background: var(--green);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(34,197,94,0.4);
+    }
+    .btn-quick-home:active { transform: scale(.97); }
+    .btn-reload-calib {
+      padding: 16px 20px;
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      background: transparent;
+      color: var(--dim);
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .btn-reload-calib:hover { background: var(--card2); color: var(--text); border-color: var(--dim); }
+
+    /* ── 영점 설정 카드 ── */
+    .zero-card {
+      background: var(--card);
+      border: 1.5px solid var(--border);
+      border-top: 3px solid #c0892a;
+      border-radius: 14px;
+      padding: 22px 26px;
+    }
+    .zero-card h2 { font-size: 15px; color: #f59e0b; margin-bottom: 6px; }
+    .zero-card .warn-note {
+      font-size: 12px; color: #92400e;
+      background: #2d1b06; border: 1px solid #78350f;
+      border-radius: 8px; padding: 8px 12px;
+      margin-bottom: 16px; line-height: 1.7;
+    }
+    .joint-select-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .joint-chip {
+      padding: 10px 6px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg);
+      color: var(--dim);
+      font-size: 13px;
+      font-weight: 700;
+      font-family: var(--mono);
+      cursor: pointer;
+      text-align: center;
+      transition: all .15s;
+    }
+    .joint-chip:hover { border-color: #f59e0b; color: #fbbf24; }
+    .joint-chip.active { border-color: #f59e0b; background: #2d1b06; color: #fbbf24; }
+    .btn-set-zero {
+      width: 100%;
+      padding: 14px;
+      border: 2px solid #f59e0b;
+      border-radius: 12px;
+      background: #2d1b06;
+      color: #fbbf24;
+      font-size: 15px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .btn-set-zero:hover { background: #f59e0b; color: #fff; box-shadow: 0 4px 20px rgba(245,158,11,0.4); }
+    .btn-set-zero:active { transform: scale(.97); }
+
+    /* ── 마스터/슬레이브 카드 ── */
+    .ms-card {
+      background: var(--card);
+      border: 1.5px solid var(--border);
+      border-top: 3px solid #8b5cf6;
+      border-radius: 14px;
+      padding: 22px 26px;
+    }
+    .ms-card h2 { font-size: 15px; color: #a78bfa; margin-bottom: 6px; }
+    .ms-card .ms-desc { font-size: 13px; color: var(--dim); margin-bottom: 14px; line-height: 1.7; }
+    .ms-status-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+    .ms-badge {
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      font-family: var(--mono);
+    }
+    .ms-badge.unknown  { background: #1e293b; color: var(--dim); border: 1px solid var(--border); }
+    .ms-badge.master   { background: #1e1b4b; color: #a5b4fc; border: 1px solid #6366f1; }
+    .ms-badge.slave    { background: #064e3b; color: #6ee7b7; border: 1px solid #10b981; }
+    .ms-badge.normal   { background: #0c1a2e; color: #93c5fd; border: 1px solid var(--accent); }
+    .ms-badge.disabled { background: #450a0a; color: #fca5a5; border: 1px solid var(--red); }
+    .ms-btn-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .btn-ms {
+      padding: 13px 8px;
+      border-radius: 11px;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all .15s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .btn-ms:active { transform: scale(.95); }
+    .btn-ms .ms-sub { font-size: 11px; font-weight: 400; opacity: 0.75; }
+    .btn-ms-master { background: #1e1b4b; border: 1.5px solid #6366f1; color: #a5b4fc; }
+    .btn-ms-master:hover { background: #6366f1; color: #fff; }
+    .btn-ms-slave  { background: #064e3b; border: 1.5px solid #10b981; color: #6ee7b7; }
+    .btn-ms-slave:hover  { background: #10b981; color: #fff; }
+    .btn-ms-normal { background: #0c1a2e; border: 1.5px solid var(--accent); color: #93c5fd; }
+    .btn-ms-normal:hover { background: var(--accent); color: #fff; }
+
+    /* ── 탭 네비게이션 ── */
+    .tab-bar {
+      background: var(--card);
+      border-bottom: 2px solid var(--border);
+      padding: 0 28px;
+      display: flex;
+      gap: 4px;
+      align-items: flex-end;
+      position: sticky;
+      top: 64px;
+      z-index: 90;
+    }
+    .tab-btn {
+      padding: 12px 20px;
+      border: none;
+      border-bottom: 3px solid transparent;
+      background: transparent;
+      color: var(--dim);
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all .15s;
+      white-space: nowrap;
+      margin-bottom: -2px;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--text); border-bottom-color: var(--accent); }
+    .tab-btn.active.tab-zero { border-bottom-color: #f59e0b; color: #fbbf24; }
+    .tab-btn.active.tab-ms   { border-bottom-color: #8b5cf6; color: #a78bfa; }
+
+    /* 탭 패널 */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: flex; flex-direction: column; gap: 22px; }
+
+    /* ── 로딩 오버레이 ── */
+    .loading-overlay {
+      position: fixed; inset: 0;
+      background: rgba(11,15,22,0.75);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      font-size: 16px;
+      color: var(--dim);
+      gap: 12px;
+    }
+    .loading-overlay.show { display: flex; }
+    .spinner {
+      width: 24px; height: 24px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<!-- ── 상단 바 ──────────────────────────────────────────── -->
+<div class="top-bar">
+  <div class="top-bar-title">
+    🎯 캘리브레이션
+    <span class="top-bar-badge">CALIBRATION</span>
+  </div>
+  <div class="sep"></div>
+  <a class="nav-link" href="/">← IDE</a>
+  <a class="nav-link" href="/dashboard" target="_blank">📊 대시보드</a>
+</div>
+
+<!-- ── 탭 바 ─────────────────────────────────────────────── -->
+<div class="tab-bar">
+  <button class="tab-btn active"     id="tab-calib" onclick="switchTab('calib')">🏠 홈 캘리브레이션</button>
+  <button class="tab-btn tab-zero"   id="tab-zero"  onclick="switchTab('zero')">🎯 영점 설정</button>
+  <button class="tab-btn tab-ms"     id="tab-ms"    onclick="switchTab('ms')">🔗 마스터/슬레이브</button>
+</div>
+
+<!-- ── 본문 ────────────────────────────────────────────── -->
+<div class="main">
+
+  <!-- 상태 메시지 (전체 탭 공용) -->
+  <div id="status-msg"></div>
+
+  <!-- ══ 탭 1: 홈 캘리브레이션 ══════════════════════════════ -->
+  <div class="tab-panel active" id="panel-calib">
+
+    <div class="desc-card">
+      <h3>홈 캘리브레이션이란?</h3>
+      <p>
+        각 관절(J1~J6)의 <strong>홈(원점) 위치</strong>를 원하는 각도로 정의하고 저장합니다.<br>
+        저장 후에는 IDE의 <code>🏠 홈 위치로 이동</code> 블록이 이 위치로 이동합니다.<br>
+        로봇 전원 켤 때마다 <strong>[ 홈으로 이동 ]</strong> 버튼 한 번으로 반복 초기화가 가능합니다.
+      </p>
+    </div>
+
+    <div class="quick-card">
+      <h2>⚡ 빠른 초기화</h2>
+      <p class="quick-desc">
+        저장된 캘리브레이션 값으로 로봇을 즉시 홈 위치로 이동합니다.<br>
+        매 세션 시작 시 이 버튼 하나로 반복 초기화를 수행하세요.
+      </p>
+      <div class="quick-btn-row">
+        <button class="btn-quick-home" onclick="quickGoHome()">
+          🏠 저장된 홈 위치로 이동
+        </button>
+        <button class="btn-reload-calib" onclick="loadAndDisplay()" title="저장된 캘리브레이션을 슬라이더에 다시 불러옵니다">
+          ↺ 불러오기
+        </button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🦾 관절 각도 설정 (−175° ~ +175°)</h2>
+      <div class="range-hint">
+        <span>−175°</span><span>−90°</span><span>0°</span><span>+90°</span><span>+175°</span>
+      </div>
+      <div id="joint-controls"></div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-read" onclick="readCurrentPosition()">
+        📡 현재 위치 읽기
+        <span class="btn-sub">로봇에서 불러옴</span>
+      </button>
+      <button class="btn btn-reset" onclick="resetToZero()">
+        ↺ 모두 0° 초기화
+        <span class="btn-sub">기본값으로 리셋</span>
+      </button>
+      <button class="btn btn-save" onclick="saveCalibration()">
+        💾 저장
+        <span class="btn-sub">calibration.json</span>
+      </button>
+      <button class="btn btn-apply" onclick="saveAndApply()">
+        🏠 저장 후 이동
+        <span class="btn-sub">저장 즉시 적용</span>
+      </button>
+    </div>
+
+    <div class="card">
+      <h2>💾 현재 저장된 캘리브레이션</h2>
+      <div id="saved-meta" class="saved-meta">로드 중...</div>
+      <div class="saved-grid" id="saved-grid"></div>
+    </div>
+
+  </div><!-- /panel-calib -->
+
+  <!-- ══ 탭 2: 영점 설정 ════════════════════════════════════ -->
+  <div class="tab-panel" id="panel-zero">
+
+    <div class="desc-card">
+      <h3>로봇 드라이버 영점 설정이란?</h3>
+      <p>
+        현재 로봇의 물리적 위치를 해당 관절의 <strong>0° 기준점</strong>으로 모터 드라이버 내부에 저장합니다.<br>
+        PC가 아닌 <strong>로봇 자체</strong>에 저장되며, 어느 PC로 연결해도 동일하게 적용됩니다.<br>
+        설정 후 <strong>로봇을 재시작</strong>해야 적용됩니다.
+      </p>
+    </div>
+
+    <div class="zero-card">
+      <h2>🎯 영점으로 설정할 관절 선택</h2>
+      <div class="warn-note">
+        ⚠️ 실행 중 로봇이 잠시 <strong>비활성화(Disable)</strong>된 후 영점 명령을 전송하고 재활성화합니다.
+      </div>
+      <div class="joint-select-grid" id="zero-joint-grid"></div>
+      <button class="btn-set-zero" onclick="doSetZero()">
+        🎯 선택한 관절 현재 위치를 영점으로 설정
+      </button>
+    </div>
+
+  </div><!-- /panel-zero -->
+
+  <!-- ══ 탭 3: 마스터/슬레이브 ══════════════════════════════ -->
+  <div class="tab-panel" id="panel-ms">
+
+    <div class="desc-card">
+      <h3>마스터 / 슬레이브 모드란?</h3>
+      <p>
+        두 대의 Piper 로봇을 연결해 한 대로 다른 한 대를 직접 교시하는 모드입니다.<br>
+        <strong>마스터(교시 입력)</strong>: 손으로 직접 움직여 동작을 입력하는 팔<br>
+        <strong>슬레이브(운동 출력)</strong>: 마스터의 움직임을 따라 동작하는 팔<br>
+        <strong>일반 모드</strong>: 독립 제어 (마스터/슬레이브 해제)
+      </p>
+    </div>
+
+    <div class="ms-card">
+      <h2>🔗 현재 모드 상태</h2>
+      <div class="ms-status-bar">
+        <span style="color:var(--dim); font-size:13px;">현재 모드</span>
+        <span class="ms-badge unknown" id="ms-mode-badge">확인 중...</span>
+        <span style="flex:1"></span>
+        <button onclick="refreshRobotStatus()" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:13px;">↺ 새로고침</button>
+      </div>
+      <div class="ms-btn-row">
+        <button class="btn-ms btn-ms-master" onclick="setMasterSlave('master')">
+          🎓 마스터 모드
+          <span class="ms-sub">교시 입력 팔</span>
+        </button>
+        <button class="btn-ms btn-ms-slave" onclick="setMasterSlave('slave')">
+          🤖 슬레이브 모드
+          <span class="ms-sub">운동 출력 팔</span>
+        </button>
+        <button class="btn-ms btn-ms-normal" onclick="setMasterSlave('normal')">
+          🔄 일반 모드
+          <span class="ms-sub">독립 제어</span>
+        </button>
+      </div>
+    </div>
+
+  </div><!-- /panel-ms -->
+
+</div>
+
+<div class="loading-overlay" id="loading">
+  <div class="spinner"></div>
+  처리 중...
+</div>
+
+<script>
+// ── 관절 정의 ──────────────────────────────────────────────
+const JOINTS = ['J1','J2','J3','J4','J5','J6'];
+const J_MIN = -175, J_MAX = 175;
+
+// ── 관절 슬라이더 생성 ────────────────────────────────────
+const ctrl = document.getElementById('joint-controls');
+for (const jid of JOINTS) {
+  const row = document.createElement('div');
+  row.className = 'joint-row';
+  row.innerHTML = `
+    <span class="joint-label">${jid}</span>
+    <input type="range" class="joint-slider" id="sl-${jid}"
+           min="${J_MIN}" max="${J_MAX}" step="0.1" value="0">
+    <input type="number" class="joint-input" id="in-${jid}"
+           min="${J_MIN}" max="${J_MAX}" step="0.1" value="0.0">
+    <span class="joint-unit">°</span>`;
+  ctrl.appendChild(row);
+
+  const sl = document.getElementById(`sl-${jid}`);
+  const inp = document.getElementById(`in-${jid}`);
+
+  sl.addEventListener('input', () => { inp.value = parseFloat(sl.value).toFixed(1); });
+  inp.addEventListener('input', () => {
+    const v = clamp(parseFloat(inp.value) || 0);
+    sl.value = v;
+  });
+  inp.addEventListener('change', () => {
+    const v = clamp(parseFloat(inp.value) || 0);
+    inp.value = v.toFixed(1);
+    sl.value = v;
+  });
+}
+
+// ── 헬퍼 ─────────────────────────────────────────────────
+function clamp(v) { return Math.max(J_MIN, Math.min(J_MAX, v)); }
+
+function getValues() {
+  return JOINTS.map(j => parseFloat(document.getElementById(`in-${j}`).value) || 0);
+}
+
+function setValues(vals) {
+  JOINTS.forEach((j, i) => {
+    const v = clamp(parseFloat(vals[i]) || 0);
+    document.getElementById(`in-${j}`).value = v.toFixed(1);
+    document.getElementById(`sl-${j}`).value = v;
+  });
+}
+
+function showStatus(msg, type = 'info') {
+  const el = document.getElementById('status-msg');
+  el.textContent = msg;
+  el.className = 'show ' + type;
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => { el.className = ''; }, 5000);
+}
+
+function setLoading(on) {
+  document.getElementById('loading').classList.toggle('show', on);
+}
+
+// ── 저장된 캘리브레이션 표시 갱신 ────────────────────────
+async function refreshSavedDisplay() {
+  try {
+    const r = await fetch('/api/calibration');
+    const cal = await r.json();
+    document.getElementById('saved-meta').textContent =
+      '설명: ' + (cal.label || '(없음)');
+    const grid = document.getElementById('saved-grid');
+    grid.innerHTML = '';
+    (cal.joints || Array(6).fill(0)).forEach((v, i) => {
+      const cell = document.createElement('div');
+      cell.className = 'saved-cell';
+      cell.innerHTML = `
+        <span class="jlabel">J${i + 1}</span>
+        <span class="jval">${parseFloat(v).toFixed(1)}</span>
+        <span class="junit">°</span>`;
+      grid.appendChild(cell);
+    });
+  } catch(e) {
+    document.getElementById('saved-meta').textContent = '로드 실패: ' + e.message;
+  }
+}
+
+// ── 저장된 값 → 슬라이더에 불러오기 ─────────────────────
+async function loadAndDisplay() {
+  setLoading(true);
+  try {
+    const r = await fetch('/api/calibration');
+    const cal = await r.json();
+    if (cal.joints && cal.joints.length === 6) {
+      setValues(cal.joints);
+      showStatus('저장된 캘리브레이션을 불러왔습니다.', 'info');
+    }
+  } catch(e) {
+    showStatus('불러오기 실패: ' + e.message, 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ── 현재 로봇 위치 읽기 ──────────────────────────────────
+async function readCurrentPosition() {
+  setLoading(true);
+  try {
+    const r = await fetch('/capture');
+    const data = await r.json();
+    if (!data.joints || data.joints.length < 6) {
+      showStatus('읽기 실패: 로봇 연결 없음 — 시뮬레이션 모드를 켜거나 실제 로봇을 연결하세요.', 'error');
+      return;
+    }
+    setValues(data.joints);
+    const src = data.mode === 'simulation' ? '시뮬레이션' : '실제 로봇';
+    showStatus(`[${src}] 현재 위치 읽기 완료. 슬라이더에 반영됐습니다.`, 'info');
+  } catch(e) {
+    showStatus('읽기 실패: ' + e.message, 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ── 모두 0° 초기화 ────────────────────────────────────────
+function resetToZero() {
+  setValues(Array(6).fill(0));
+  showStatus('모든 관절을 0°로 초기화했습니다. "저장" 버튼으로 적용하세요.', 'info');
+}
+
+// ── 저장 ─────────────────────────────────────────────────
+async function saveCalibration() {
+  const joints = getValues();
+  const label = `캘리브레이션 저장 (${new Date().toLocaleString('ko-KR')})`;
+  setLoading(true);
+  try {
+    const r = await fetch('/api/calibration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ joints, label })
+    });
+    const res = await r.json();
+    if (res.status !== 'ok') { showStatus('저장 실패: ' + res.message, 'error'); return; }
+    showStatus('✅ 저장 완료! 이제 "🏠 홈 위치로 이동" 블록이 이 위치를 사용합니다.', 'success');
+    refreshSavedDisplay();
+  } catch(e) {
+    showStatus('저장 실패: ' + e.message, 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ── 저장 후 즉시 이동 ─────────────────────────────────────
+async function saveAndApply() {
+  const joints = getValues();
+  const label = `캘리브레이션 저장 (${new Date().toLocaleString('ko-KR')})`;
+  setLoading(true);
+  try {
+    // 1) 저장
+    const sr = await fetch('/api/calibration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ joints, label })
+    });
+    const sres = await sr.json();
+    if (sres.status !== 'ok') { showStatus('저장 실패: ' + sres.message, 'error'); return; }
+
+    // 2) 이동 적용
+    const ar = await fetch('/api/calibration/apply', { method: 'POST' });
+    const ares = await ar.json();
+    const type = ares.status === 'ok' ? 'success' : 'warning';
+    showStatus((ares.status === 'ok' ? '✅ ' : '⚠️ ') + (ares.message || '적용 완료'), type);
+    refreshSavedDisplay();
+  } catch(e) {
+    showStatus('적용 실패: ' + e.message, 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ── 빠른 홈 이동 (저장된 값으로 바로 이동) ───────────────
+async function quickGoHome() {
+  setLoading(true);
+  try {
+    const ar = await fetch('/api/calibration/apply', { method: 'POST' });
+    const ares = await ar.json();
+    const type = ares.status === 'ok' ? 'success' : 'warning';
+    showStatus((ares.status === 'ok' ? '🏠 ' : '⚠️ ') + (ares.message || '이동 완료'), type);
+  } catch(e) {
+    showStatus('이동 실패: ' + e.message, 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ── 탭 전환 ──────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.getElementById('panel-' + name).classList.add('active');
+  if (name === 'ms') refreshRobotStatus();
+}
+
+// ── 영점 설정: 관절 선택 칩 생성 ────────────────────────────
+let selectedZeroJoint = 7; // 기본: 전체
+(function buildZeroChips() {
+  const grid = document.getElementById('zero-joint-grid');
+  const chips = [
+    { label: 'J1', val: 1 }, { label: 'J2', val: 2 },
+    { label: 'J3', val: 3 }, { label: 'J4', val: 4 },
+    { label: 'J5', val: 5 }, { label: 'J6', val: 6 },
+    { label: '전체', val: 7 }, { label: '전체', val: 7 }
+  ];
+  const uniqueChips = [
+    { label: 'J1', val: 1 }, { label: 'J2', val: 2 },
+    { label: 'J3', val: 3 }, { label: 'J4', val: 4 },
+    { label: 'J5', val: 5 }, { label: 'J6', val: 6 },
+    { label: '🔗 전체 (J1~J6)', val: 7 }
+  ];
+  uniqueChips.forEach(c => {
+    const el = document.createElement('div');
+    el.className = 'joint-chip' + (c.val === 7 ? ' active' : '');
+    el.textContent = c.label;
+    if (c.val === 7) el.style.gridColumn = 'span 1';
+    el.onclick = () => {
+      document.querySelectorAll('.joint-chip').forEach(x => x.classList.remove('active'));
+      el.classList.add('active');
+      selectedZeroJoint = c.val;
+    };
+    grid.appendChild(el);
+  });
+})();
+
+async function doSetZero() {
+  const label = selectedZeroJoint === 7 ? '전체 관절' : `관절 ${selectedZeroJoint}번`;
+  if (!confirm(`[${label}]의 현재 위치를 영점으로 설정합니다.\n실행 중 로봇이 잠시 비활성화됩니다. 계속할까요?`)) return;
+  setLoading(true);
+  try {
+    const r = await fetch('/api/robot/set_zero', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ joint_num: selectedZeroJoint })
+    });
+    const res = await r.json();
+    const type = res.status === 'ok' ? 'success' : res.status === 'warning' ? 'warning' : 'error';
+    showStatus((res.status === 'ok' ? '✅ ' : '⚠️ ') + res.message, type);
+  } catch(e) {
+    showStatus('영점 설정 실패: ' + e.message, 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ── 마스터/슬레이브 모드 ─────────────────────────────────────
+const MS_LABELS = {
+  master: { text: '마스터 (교시 입력)', cls: 'master' },
+  slave:  { text: '슬레이브 (운동 출력)', cls: 'slave' },
+  normal: { text: '일반 모드', cls: 'normal' },
+};
+const CTRL_MODE_MAP = { 0: 'normal', 1: 'normal', 2: 'master', 3: 'slave' };
+
+async function refreshRobotStatus() {
+  const badge = document.getElementById('ms-mode-badge');
+  try {
+    const r = await fetch('/api/robot/status');
+    const d = await r.json();
+    if (d.simulation) {
+      badge.className = 'ms-badge unknown';
+      badge.textContent = '시뮬레이션 모드';
+      return;
+    }
+    if (!d.enabled) {
+      badge.className = 'ms-badge disabled';
+      badge.textContent = '비활성화';
+      return;
+    }
+    const modeKey = CTRL_MODE_MAP[d.ctrl_mode] || 'normal';
+    const info = MS_LABELS[modeKey];
+    badge.className = 'ms-badge ' + info.cls;
+    badge.textContent = info.text + (d.ctrl_mode !== undefined ? ` (ctrl_mode=${d.ctrl_mode})` : '');
+  } catch(e) {
+    badge.className = 'ms-badge unknown';
+    badge.textContent = '연결 오류';
+  }
+}
+
+async function setMasterSlave(mode) {
+  setLoading(true);
+  try {
+    const r = await fetch('/api/robot/master_slave', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode })
+    });
+    const res = await r.json();
+    const type = res.status === 'ok' ? 'success' : res.status === 'warning' ? 'warning' : 'error';
+    showStatus((res.status === 'ok' ? '✅ ' : '⚠️ ') + res.message, type);
+    await refreshRobotStatus();
+  } catch(e) {
+    showStatus('모드 전환 실패: ' + e.message, 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ── 페이지 로드 초기화 ────────────────────────────────────
+(async function init() {
+  try {
+    const r = await fetch('/api/calibration');
+    const cal = await r.json();
+    if (cal.joints && cal.joints.length === 6) {
+      setValues(cal.joints);
+    }
+  } catch(e) {}
+  await refreshSavedDisplay();
+  await refreshRobotStatus();
+})();
+</script>
+</body>
+</html>
