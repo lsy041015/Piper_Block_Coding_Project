@@ -634,36 +634,24 @@
   <!-- 카테고리 3: 관절 공간 이동 (MoveJ) -->
   <category name="🦾 관절 제어 (MoveJ)" colour="#1e6fbf">
     <block type="piper_movej">
-      <value name="J1"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
-      <value name="J2"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
-      <value name="J3"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
-      <value name="J4"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
-      <value name="J5"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
-      <value name="J6"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <field name="J1">0</field><field name="J2">0</field><field name="J3">0</field>
+      <field name="J4">0</field><field name="J5">0</field><field name="J6">0</field>
     </block>
   </category>
 
   <!-- 카테고리 4: 직교 공간 PTP 이동 (MoveP) -->
   <category name="📍 위치 제어 (MoveP)" colour="#7b3f9e">
     <block type="piper_movep">
-      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
-      <value name="Y"><shadow type="math_number"><field name="NUM">250</field></shadow></value>
-      <value name="Z"><shadow type="math_number"><field name="NUM">250</field></shadow></value>
-      <value name="RX"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
-      <value name="RY"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
-      <value name="RZ"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <field name="X">0</field><field name="Y">250</field><field name="Z">250</field>
+      <field name="RX">0</field><field name="RY">0</field><field name="RZ">0</field>
     </block>
   </category>
 
   <!-- 카테고리 5: 직교 공간 선형 이동 (MoveL) -->
   <category name="📏 선형 이동 (MoveL)" colour="#9e3f7b">
     <block type="piper_movel">
-      <value name="X"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
-      <value name="Y"><shadow type="math_number"><field name="NUM">250</field></shadow></value>
-      <value name="Z"><shadow type="math_number"><field name="NUM">200</field></shadow></value>
-      <value name="RX"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
-      <value name="RY"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
-      <value name="RZ"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      <field name="X">0</field><field name="Y">250</field><field name="Z">200</field>
+      <field name="RX">0</field><field name="RY">0</field><field name="RZ">0</field>
     </block>
   </category>
 
@@ -672,14 +660,14 @@
     <block type="piper_gripper_open"></block>
     <block type="piper_gripper_close"></block>
     <block type="piper_gripper">
-      <value name="POSITION"><shadow type="math_number"><field name="NUM">35</field></shadow></value>
+      <field name="POSITION">35</field>
     </block>
   </category>
 
   <!-- 카테고리 7: 시간 대기 -->
   <category name="⏱️ 시간" colour="#6b4c2a">
     <block type="piper_wait">
-      <value name="SECONDS"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
+      <field name="SECONDS">1</field>
     </block>
   </category>
 
@@ -889,67 +877,64 @@ Blockly.defineBlocksWithJsonArray([
     "tooltip": "이동 속도를 설정합니다 (1~100%). 이후 MoveJ/MoveP/MoveL에 적용됩니다."
   },
 
-  // ── MoveJ 블록 (관절 공간 이동) ─ input_value → 변수 연결 가능
+  // ── MoveJ 블록 (관절 공간 이동) ──────────────────────────
   {
     "type": "piper_movej",
     "message0": "🦾 관절 제어 (MoveJ)",
-    "message1": " J1 %1 °   J2 %2 °   J3 %3 °",
+    "message1": " J1 %1 °    J2 %2 °    J3 %3 °",
     "args1": [
-      {"type": "input_value", "name": "J1", "check": "Number"},
-      {"type": "input_value", "name": "J2", "check": "Number"},
-      {"type": "input_value", "name": "J3", "check": "Number"}
+      {"type": "field_number", "name": "J1", "value": 0, "min": -175, "max": 175, "precision": 0.1},
+      {"type": "field_number", "name": "J2", "value": 0, "min": -175, "max": 175, "precision": 0.1},
+      {"type": "field_number", "name": "J3", "value": 0, "min": -175, "max": 175, "precision": 0.1}
     ],
-    "message2": " J4 %1 °   J5 %2 °   J6 %3 °",
+    "message2": " J4 %1 °    J5 %2 °    J6 %3 °",
     "args2": [
-      {"type": "input_value", "name": "J4", "check": "Number"},
-      {"type": "input_value", "name": "J5", "check": "Number"},
-      {"type": "input_value", "name": "J6", "check": "Number"}
+      {"type": "field_number", "name": "J4", "value": 0, "min": -175, "max": 175, "precision": 0.1},
+      {"type": "field_number", "name": "J5", "value": 0, "min": -175, "max": 175, "precision": 0.1},
+      {"type": "field_number", "name": "J6", "value": 0, "min": -175, "max": 175, "precision": 0.1}
     ],
-    "inputsInline": true,
     "previousStatement": null, "nextStatement": null,
     "colour": "#1e6fbf",
-    "tooltip": "6개 관절 각도(°)로 로봇을 이동합니다. 숫자 블록 또는 변수를 연결할 수 있습니다."
+    "tooltip": "6개 관절 각도(°)로 로봇을 이동합니다."
   },
 
-  // ── MoveP 블록 (직교 공간 PTP 이동) ─ input_value → 변수 연결 가능
+  // ── MoveP 블록 (직교 공간 PTP 이동) ──────────────────────
   {
     "type": "piper_movep",
     "message0": "📍 위치 제어 PTP (MoveP)",
-    "message1": " X %1 mm   Y %2 mm   Z %3 mm",
+    "message1": " X %1 mm    Y %2 mm    Z %3 mm",
     "args1": [
-      {"type": "input_value", "name": "X",  "check": "Number"},
-      {"type": "input_value", "name": "Y",  "check": "Number"},
-      {"type": "input_value", "name": "Z",  "check": "Number"}
+      {"type": "field_number", "name": "X",  "value": 0,   "min": -700, "max": 700, "precision": 0.1},
+      {"type": "field_number", "name": "Y",  "value": 250, "min": -700, "max": 700, "precision": 0.1},
+      {"type": "field_number", "name": "Z",  "value": 250, "min": -100, "max": 900, "precision": 0.1}
     ],
-    "message2": " RX %1 °   RY %2 °   RZ %3 °",
+    "message2": " RX %1 °    RY %2 °    RZ %3 °",
     "args2": [
-      {"type": "input_value", "name": "RX", "check": "Number"},
-      {"type": "input_value", "name": "RY", "check": "Number"},
-      {"type": "input_value", "name": "RZ", "check": "Number"}
+      {"type": "field_number", "name": "RX", "value": 0, "min": -180, "max": 180, "precision": 0.1},
+      {"type": "field_number", "name": "RY", "value": 0, "min": -180, "max": 180, "precision": 0.1},
+      {"type": "field_number", "name": "RZ", "value": 0, "min": -180, "max": 180, "precision": 0.1}
     ],
-    "inputsInline": true,
     "previousStatement": null, "nextStatement": null,
     "colour": "#7b3f9e",
     "tooltip": "3D 위치(mm)와 자세(°)로 로봇 엔드 이펙터를 이동합니다. (PTP 경로)"
   },
 
-  // ── MoveL 블록 (직교 공간 선형 이동) ─ input_value → 변수 연결 가능
+  // ── MoveL 블록 (직교 공간 선형 이동) ─────────────────────
   {
     "type": "piper_movel",
     "message0": "📏 선형 이동 (MoveL)",
-    "message1": " X %1 mm   Y %2 mm   Z %3 mm",
+    "message1": " X %1 mm    Y %2 mm    Z %3 mm",
     "args1": [
-      {"type": "input_value", "name": "X",  "check": "Number"},
-      {"type": "input_value", "name": "Y",  "check": "Number"},
-      {"type": "input_value", "name": "Z",  "check": "Number"}
+      {"type": "field_number", "name": "X",  "value": 0,   "min": -700, "max": 700, "precision": 0.1},
+      {"type": "field_number", "name": "Y",  "value": 250, "min": -700, "max": 700, "precision": 0.1},
+      {"type": "field_number", "name": "Z",  "value": 200, "min": -100, "max": 900, "precision": 0.1}
     ],
-    "message2": " RX %1 °   RY %2 °   RZ %3 °",
+    "message2": " RX %1 °    RY %2 °    RZ %3 °",
     "args2": [
-      {"type": "input_value", "name": "RX", "check": "Number"},
-      {"type": "input_value", "name": "RY", "check": "Number"},
-      {"type": "input_value", "name": "RZ", "check": "Number"}
+      {"type": "field_number", "name": "RX", "value": 0, "min": -180, "max": 180, "precision": 0.1},
+      {"type": "field_number", "name": "RY", "value": 0, "min": -180, "max": 180, "precision": 0.1},
+      {"type": "field_number", "name": "RZ", "value": 0, "min": -180, "max": 180, "precision": 0.1}
     ],
-    "inputsInline": true,
     "previousStatement": null, "nextStatement": null,
     "colour": "#9e3f7b",
     "tooltip": "직선 경로로 엔드 이펙터를 이동합니다. (선형 보간)"
@@ -975,26 +960,24 @@ Blockly.defineBlocksWithJsonArray([
     "tooltip": "그리퍼를 완전히 닫습니다."
   },
 
-  // ── 그리퍼 위치 지정 블록 ─ input_value → 변수 연결 가능
+  // ── 그리퍼 위치 지정 블록 ────────────────────────────────
   {
     "type": "piper_gripper",
     "message0": "✋ 그리퍼  %1 mm",
-    "args0": [{"type": "input_value", "name": "POSITION", "check": "Number"}],
-    "inputsInline": true,
+    "args0": [{"type": "field_number", "name": "POSITION", "value": 35, "min": 0, "max": 70, "precision": 0.1}],
     "previousStatement": null, "nextStatement": null,
     "colour": "#bf7e1e",
-    "tooltip": "그리퍼 위치를 지정합니다 (0mm=닫힘, 70mm=열림). 변수 연결 가능."
+    "tooltip": "그리퍼 위치를 지정합니다 (0mm=닫힘, 70mm=열림)."
   },
 
-  // ── 대기 블록 ─ input_value → 변수 연결 가능
+  // ── 대기 블록 ────────────────────────────────────────────
   {
     "type": "piper_wait",
     "message0": "⏱️  %1 초 대기",
-    "args0": [{"type": "input_value", "name": "SECONDS", "check": "Number"}],
-    "inputsInline": true,
+    "args0": [{"type": "field_number", "name": "SECONDS", "value": 1, "min": 0, "max": 300, "precision": 0.1}],
     "previousStatement": null, "nextStatement": null,
     "colour": "#6b4c2a",
-    "tooltip": "지정한 시간(초) 동안 대기합니다. 변수 연결 가능."
+    "tooltip": "지정한 시간(초) 동안 대기합니다. (최대 300초)"
   },
 
   // ── 단순 반복문 블록 ──────────────────────────────────────
@@ -1035,45 +1018,38 @@ Blockly.Python['piper_set_zero_joint'] = b =>
 Blockly.Python['piper_set_speed'] = b =>
   'set_speed(' + b.getFieldValue('SPEED') + ')\n';
 
-// MoveJ: movej(j1,j2,j3,j4,j5,j6) — input_value 지원 (변수 연결 가능)
-Blockly.Python['piper_movej'] = function(b) {
-  var O = Blockly.Python.ORDER_NONE;
-  var args = ['J1','J2','J3','J4','J5','J6'].map(
-    n => Blockly.Python.valueToCode(b, n, O) || '0');
-  return 'movej(' + args.join(', ') + ')\n';
-};
+// MoveJ: movej(j1, j2, j3, j4, j5, j6)
+Blockly.Python['piper_movej'] = b =>
+  'movej(' +
+  [b.getFieldValue('J1'), b.getFieldValue('J2'), b.getFieldValue('J3'),
+   b.getFieldValue('J4'), b.getFieldValue('J5'), b.getFieldValue('J6')].join(', ') +
+  ')\n';
 
-// MoveP: movep(x,y,z,rx,ry,rz)
-Blockly.Python['piper_movep'] = function(b) {
-  var O = Blockly.Python.ORDER_NONE;
-  var args = ['X','Y','Z','RX','RY','RZ'].map(
-    n => Blockly.Python.valueToCode(b, n, O) || '0');
-  return 'movep(' + args.join(', ') + ')\n';
-};
+// MoveP: movep(x, y, z, rx, ry, rz)
+Blockly.Python['piper_movep'] = b =>
+  'movep(' +
+  [b.getFieldValue('X'), b.getFieldValue('Y'), b.getFieldValue('Z'),
+   b.getFieldValue('RX'), b.getFieldValue('RY'), b.getFieldValue('RZ')].join(', ') +
+  ')\n';
 
-// MoveL: movel(x,y,z,rx,ry,rz)
-Blockly.Python['piper_movel'] = function(b) {
-  var O = Blockly.Python.ORDER_NONE;
-  var args = ['X','Y','Z','RX','RY','RZ'].map(
-    n => Blockly.Python.valueToCode(b, n, O) || '0');
-  return 'movel(' + args.join(', ') + ')\n';
-};
+// MoveL: movel(x, y, z, rx, ry, rz)
+Blockly.Python['piper_movel'] = b =>
+  'movel(' +
+  [b.getFieldValue('X'), b.getFieldValue('Y'), b.getFieldValue('Z'),
+   b.getFieldValue('RX'), b.getFieldValue('RY'), b.getFieldValue('RZ')].join(', ') +
+  ')\n';
 
 // 그리퍼 단축 블록 (고정값)
 Blockly.Python['piper_gripper_open']  = () => 'gripper_ctrl(70)\n';
 Blockly.Python['piper_gripper_close'] = () => 'gripper_ctrl(0)\n';
 
-// 그리퍼 위치 블록 — input_value 지원
-Blockly.Python['piper_gripper'] = function(b) {
-  var pos = Blockly.Python.valueToCode(b, 'POSITION', Blockly.Python.ORDER_NONE) || '0';
-  return 'gripper_ctrl(' + pos + ')\n';
-};
+// 그리퍼 위치 블록
+Blockly.Python['piper_gripper'] = b =>
+  'gripper_ctrl(' + b.getFieldValue('POSITION') + ')\n';
 
-// 대기: time.sleep(초) — input_value 지원
-Blockly.Python['piper_wait'] = function(b) {
-  var sec = Blockly.Python.valueToCode(b, 'SECONDS', Blockly.Python.ORDER_NONE) || '1';
-  return 'time.sleep(' + sec + ')\n';
-};
+// 대기: time.sleep(초)
+Blockly.Python['piper_wait'] = b =>
+  'time.sleep(' + b.getFieldValue('SECONDS') + ')\n';
 
 // 반복문 — 카운터(_i) 포함, 터미널에 진행 상황 출력
 Blockly.Python['piper_repeat'] = function(block) {
@@ -1166,21 +1142,17 @@ const workspace = Blockly.inject('blocklyDiv', {
     }
   }
 
-  // 기본 예제 프로그램 — input_value + shadow 형식
+  // 기본 예제 프로그램
   const xml = `<xml>
     <block type="piper_enable" x="30" y="30">
       <next><block type="piper_home">
         <next><block type="piper_wait">
-          <value name="SECONDS"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
+          <field name="SECONDS">1</field>
           <next><block type="piper_movej">
-            <value name="J1"><shadow type="math_number"><field name="NUM">30</field></shadow></value>
-            <value name="J2"><shadow type="math_number"><field name="NUM">-30</field></shadow></value>
-            <value name="J3"><shadow type="math_number"><field name="NUM">60</field></shadow></value>
-            <value name="J4"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
-            <value name="J5"><shadow type="math_number"><field name="NUM">30</field></shadow></value>
-            <value name="J6"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+            <field name="J1">30</field><field name="J2">-30</field><field name="J3">60</field>
+            <field name="J4">0</field><field name="J5">30</field><field name="J6">0</field>
             <next><block type="piper_wait">
-              <value name="SECONDS"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
+              <field name="SECONDS">1</field>
               <next><block type="piper_home"></block></next>
             </block></next>
           </block></next>
@@ -1555,17 +1527,9 @@ async function teachPosition() {
 
     const j = data.joints.map(v => parseFloat(v.toFixed(1)));
 
-    // piper_movej 블록 생성 — input_value 방식으로 shadow 숫자 블록 연결
+    // piper_movej 블록 생성 — field_number 방식으로 직접 값 설정
     const block = workspace.newBlock('piper_movej');
-    ['J1','J2','J3','J4','J5','J6'].forEach((name, i) => {
-      const numBlock = workspace.newBlock('math_number');
-      numBlock.setFieldValue(String(j[i]), 'NUM');
-      numBlock.setShadow(true);
-      numBlock.initSvg();
-      numBlock.render();
-      const conn = block.getInput(name) && block.getInput(name).connection;
-      if (conn) conn.connect(numBlock.outputConnection);
-    });
+    ['J1','J2','J3','J4','J5','J6'].forEach((f, i) => block.setFieldValue(String(j[i]), f));
     block.initSvg();
     block.render();
 
