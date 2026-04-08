@@ -1159,24 +1159,28 @@ const workspace = Blockly.inject('blocklyDiv', {
   if (saved) {
     try {
       Blockly.Xml.domToWorkspace(Blockly.Xml.textToDom(saved), workspace);
-      return;  // 복원 성공 → 기본 프로그램 삽입 건너뜀
+      return;
     } catch(e) {
-      localStorage.removeItem(LS_KEY);  // 손상된 데이터 삭제
+      localStorage.removeItem(LS_KEY);  // 손상된 데이터(구 field 형식 등) 삭제
       console.warn('Auto-save restore failed, loading default:', e);
     }
   }
 
-  // 저장된 데이터 없으면 기본 예제 프로그램 삽입
+  // 기본 예제 프로그램 — input_value + shadow 형식
   const xml = `<xml>
     <block type="piper_enable" x="30" y="30">
       <next><block type="piper_home">
         <next><block type="piper_wait">
-          <field name="SECONDS">1</field>
+          <value name="SECONDS"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
           <next><block type="piper_movej">
-            <field name="J1">30</field><field name="J2">-30</field><field name="J3">60</field>
-            <field name="J4">0</field><field name="J5">30</field><field name="J6">0</field>
+            <value name="J1"><shadow type="math_number"><field name="NUM">30</field></shadow></value>
+            <value name="J2"><shadow type="math_number"><field name="NUM">-30</field></shadow></value>
+            <value name="J3"><shadow type="math_number"><field name="NUM">60</field></shadow></value>
+            <value name="J4"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+            <value name="J5"><shadow type="math_number"><field name="NUM">30</field></shadow></value>
+            <value name="J6"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
             <next><block type="piper_wait">
-              <field name="SECONDS">1</field>
+              <value name="SECONDS"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
               <next><block type="piper_home"></block></next>
             </block></next>
           </block></next>
@@ -1551,9 +1555,17 @@ async function teachPosition() {
 
     const j = data.joints.map(v => parseFloat(v.toFixed(1)));
 
-    // Blockly API로 movej 블록 생성
+    // piper_movej 블록 생성 — input_value 방식으로 shadow 숫자 블록 연결
     const block = workspace.newBlock('piper_movej');
-    ['J1','J2','J3','J4','J5','J6'].forEach((f, i) => block.setFieldValue(String(j[i]), f));
+    ['J1','J2','J3','J4','J5','J6'].forEach((name, i) => {
+      const numBlock = workspace.newBlock('math_number');
+      numBlock.setFieldValue(String(j[i]), 'NUM');
+      numBlock.setShadow(true);
+      numBlock.initSvg();
+      numBlock.render();
+      const conn = block.getInput(name) && block.getInput(name).connection;
+      if (conn) conn.connect(numBlock.outputConnection);
+    });
     block.initSvg();
     block.render();
 
