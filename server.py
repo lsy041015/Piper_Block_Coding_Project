@@ -246,7 +246,8 @@ def gripper_ctrl(g):
 def go_home():
     import json as _json, os as _os
     try:
-        with open(_os.path.join(_os.getcwd(), 'calibration.json')) as _f:
+        _cal = _os.environ.get('PIPER_CAL_FILE', 'calibration.json')
+        with open(_cal) as _f:
             _j = _json.load(_f).get('joints', [0.0]*6)
     except Exception:
         _j = [0.0]*6
@@ -303,39 +304,32 @@ def set_speed(speed):
 
 def movej(j1, j2, j3, j4, j5, j6):
     """관절 공간 이동 (MoveJ). 단위: 도°"""
-    vals = wego.convert.run([j1, j2, j3, j4, j5, j6, _gripper_pos])
-    # WeGo.convert: 도°/mm 값을 SDK 내부 단위(×1000)로 일괄 변환
-    joints, g = vals[:6], abs(vals[6])
+    vals = wego.convert.run([j1, j2, j3, j4, j5, j6, 0])
+    joints = vals[:6]
     print("MoveJ J1=" + str(j1) + " J2=" + str(j2) + " J3=" + str(j3) +
           " J4=" + str(j4) + " J5=" + str(j5) + " J6=" + str(j6))
     piper.MotionCtrl_2(0x01, 0x01, int(_speed), 0x00)
-    # 0x01=활성화, 0x01=MoveJ 모드, _speed=속도(1~100), 0x00=예비
     piper.JointCtrl(*joints)
-    piper.GripperCtrl(g, 1000, 0x01, 0)
-    wego.check.joint(*joints)  # WeGo.check: 모든 관절이 목표에 도달할 때까지 대기
+    wego.check.joint(*joints)
 
 def movep(x, y, z, rx, ry, rz):
     """직교 공간 PTP 이동 (MoveP). 위치: mm, 자세: 도° (최단 경로)"""
-    vals = wego.convert.run([x, y, z, rx, ry, rz, _gripper_pos])
-    pose, g = vals[:6], abs(vals[6])
+    vals = wego.convert.run([x, y, z, rx, ry, rz, 0])
+    pose = vals[:6]
     print("MoveP X=" + str(x) + " Y=" + str(y) + " Z=" + str(z) +
           " RX=" + str(rx) + " RY=" + str(ry) + " RZ=" + str(rz))
     piper.MotionCtrl_2(0x01, 0x00, int(_speed), 0x00)
-    # 0x00=MoveP(PTP) 모드
     piper.EndPoseCtrl(*pose)
-    piper.GripperCtrl(g, 1000, 0x01, 0)
-    wego.check.pose(*pose)  # WeGo.check: 엔드 이펙터가 목표 위치에 도달할 때까지 대기
+    wego.check.pose(*pose)
 
 def movel(x, y, z, rx, ry, rz):
     """직교 공간 선형 이동 (MoveL). 위치: mm, 자세: 도° (직선 경로 보장)"""
-    vals = wego.convert.run([x, y, z, rx, ry, rz, _gripper_pos])
-    pose, g = vals[:6], abs(vals[6])
+    vals = wego.convert.run([x, y, z, rx, ry, rz, 0])
+    pose = vals[:6]
     print("MoveL X=" + str(x) + " Y=" + str(y) + " Z=" + str(z) +
           " RX=" + str(rx) + " RY=" + str(ry) + " RZ=" + str(rz))
     piper.MotionCtrl_2(0x01, 0x02, int(_speed), 0x00)
-    # 0x02=MoveL(선형 보간) 모드
     piper.EndPoseCtrl(*pose)
-    piper.GripperCtrl(g, 1000, 0x01, 0)
     wego.check.pose(*pose)
 
 def gripper_ctrl(position_mm):
@@ -355,7 +349,8 @@ def go_home():
     """캘리브레이션된 홈 위치 복귀"""
     import json as _json, os as _os
     try:
-        with open(_os.path.join(_os.getcwd(), 'calibration.json')) as _f:
+        _cal = _os.environ.get('PIPER_CAL_FILE', 'calibration.json')
+        with open(_cal) as _f:
             _j = _json.load(_f).get('joints', [0.0]*6)
     except Exception:
         _j = [0.0]*6
@@ -470,17 +465,21 @@ _ALLOWED_CALLS = re.compile(
     r'|set_zero_joint\s*\([1-6]\)'
     r'|print_motor_status\s*\(\s*\)'
     r'|print_motor_temps\s*\(\s*\)'
-    r'|set_speed\s*\([\d.]+\)'
-    r'|movej\s*\([\d\s.,+-]+\)'
-    r'|movep\s*\([\d\s.,+-]+\)'
-    r'|movel\s*\([\d\s.,+-]+\)'
-    r'|gripper_ctrl\s*\([\d.]+\)'
-    r'|time\.sleep\s*\([\d.]+\)'
-    r'|print\s*\(\s*["\'].*?["\']\s*\)'  # [수정 4] 문자열 리터럴만 허용 (변수/객체 접근 차단)
+    r'|set_speed\s*\([\w\d\s.+\-\*\/()]+\)'
+    r'|movej\s*\([\w\d\s.,+\-\*\/()]+\)'
+    r'|movep\s*\([\w\d\s.,+\-\*\/()]+\)'
+    r'|movel\s*\([\w\d\s.,+\-\*\/()]+\)'
+    r'|gripper_ctrl\s*\([\w\d\s.+\-\*\/()]+\)'
+    r'|time\.sleep\s*\([\w\d\s.+\-\*\/()]+\)'
+    r'|print\s*\([^)]+\)'              # print() — BLOCKED_PATTERNS가 위험 키워드 사전 차단
     r'|for\s+\w+\s+in\s+range\s*\(.+\):'
     r'|while\s+.+:'
+    r'|if\s+.+:'                       # if 조건문
+    r'|elif\s+.+:'                     # elif 조건문
+    r'|else\s*:'                       # else 절
+    r'|[a-zA-Z_]\w*\s*=\s*[\d\s.,+\-\*\/()a-zA-Z_]+$'  # 변수 대입 (e.g. j1 = 30)
     r'|pass'
-    r'|\s+'       # 빈 줄 / 들여쓰기
+    r'|\s+'                            # 빈 줄 / 들여쓰기
     r')\s*$'
 )
 
@@ -608,14 +607,15 @@ def run_code():
         try:
             tmp.write(full_code)
             tmp.close()        # 파일 닫기 (flush 포함)
+            _env = dict(os.environ)
+            _env['PIPER_CAL_FILE'] = CALIBRATION_FILE  # go_home()이 올바른 경로 참조
             current_process = subprocess.Popen(
                 [sys.executable, '-u', tmp_name],
-                # sys.executable : 현재 실행 중인 Python 인터프리터 경로
-                # '-u'           : stdout/stderr 버퍼링 비활성화 (실시간 출력)
-                stdout=subprocess.PIPE,    # 표준 출력을 파이프로 캡처
-                stderr=subprocess.STDOUT,  # 표준 오류도 표준 출력 파이프로 합침
-                text=True,                 # 바이트 대신 문자열로 읽기
-                bufsize=1,                 # 라인 버퍼링 (줄 단위로 즉시 전달)
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                env=_env,
             )
         except Exception as e:
             # Popen 실패 또는 파일 쓰기 실패 시 임시 파일 즉시 삭제
@@ -694,9 +694,14 @@ def stop_code():
     return jsonify({'status': 'ok'})
 
 
+def _is_local_request():
+    return request.remote_addr in ('127.0.0.1', '::1')
+
 @app.route('/estop', methods=['POST'])
 def estop_script():
-    """POST /estop → 0-2. piper_emergency_stop.py 실행"""
+    """POST /estop → 0-2. piper_emergency_stop.py 실행 (로컬 전용)"""
+    if not _is_local_request():
+        return jsonify({'status': 'error', 'message': '로컬에서만 사용할 수 있습니다.'}), 403
     script_file = os.path.join(SCRIPTS_PATH, '0-2. piper_emergency_stop.py')
     if os.path.exists(script_file):
         subprocess.Popen([sys.executable, script_file])
@@ -705,7 +710,9 @@ def estop_script():
 
 @app.route('/erecover', methods=['POST'])
 def erecover_script():
-    """POST /erecover → 0-3. piper_emergency_restore.py 실행"""
+    """POST /erecover → 0-3. piper_emergency_restore.py 실행 (로컬 전용)"""
+    if not _is_local_request():
+        return jsonify({'status': 'error', 'message': '로컬에서만 사용할 수 있습니다.'}), 403
     script_file = os.path.join(SCRIPTS_PATH, '0-3. piper_emergency_restore.py')
     if os.path.exists(script_file):
         subprocess.Popen([sys.executable, script_file])
@@ -1050,7 +1057,12 @@ def toggle_sim():
     """시뮬레이션 모드 토글"""
     global SIMULATION_MODE
     SIMULATION_MODE = request.json.get('enable', False)
-    return jsonify({'status': 'ok', 'simulation': SIMULATION_MODE})
+    return jsonify({'status': 'ok', 'is_simulation': SIMULATION_MODE})
+
+@app.route('/get_sim_status')
+def get_sim_status():
+    """현재 시뮬레이션 모드 상태 반환"""
+    return jsonify({'is_simulation': SIMULATION_MODE})
 
 @app.route('/update_virtual', methods=['POST'])
 def update_virtual():
