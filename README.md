@@ -7,6 +7,7 @@
 ### 개요
 Piper 6축 로봇 팔을 코딩 없이 제어할 수 있는 **비주얼 블록 코딩 플랫폼**입니다.
 구글 Blockly 엔진을 기반으로 블록을 조립하면 Python 코드가 자동 생성되어 실제 로봇에 실행됩니다.
+https://github.com/lsy041015/Piper_Block_Coding_Project/issues/5
 
 ### 주요 구성 요소
 
